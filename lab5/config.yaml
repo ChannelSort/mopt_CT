@@ -1,0 +1,120 @@
+functions:
+  - name: PolynomialRegressionObjective
+    params: {dataset_kind: near_linear, degree: 1, n_points: 120, x_range: [-3.0, 3.0], noise_variance: 0.04, seed: 11}
+  - name: PolynomialRegressionObjective
+    params: {dataset_kind: near_linear, degree: 2, n_points: 120, x_range: [-3.0, 3.0], noise_variance: 0.04, seed: 11}
+  - name: PolynomialRegressionObjective
+    params: {dataset_kind: near_linear, degree: 3, n_points: 120, x_range: [-3.0, 3.0], noise_variance: 0.04, seed: 11}
+  - name: PolynomialRegressionObjective
+    params: {dataset_kind: near_linear, degree: 4, n_points: 120, x_range: [-3.0, 3.0], noise_variance: 0.04, seed: 11}
+  - name: PolynomialRegressionObjective
+    params: {dataset_kind: near_linear, degree: 5, n_points: 120, x_range: [-3.0, 3.0], noise_variance: 0.04, seed: 11}
+
+  - name: PolynomialRegressionObjective
+    params: {dataset_kind: nonlinear, degree: 1, n_points: 120, x_range: [-2.5, 2.5], noise_variance: 0.09, seed: 17}
+  - name: PolynomialRegressionObjective
+    params: {dataset_kind: nonlinear, degree: 2, n_points: 120, x_range: [-2.5, 2.5], noise_variance: 0.09, seed: 17}
+  - name: PolynomialRegressionObjective
+    params: {dataset_kind: nonlinear, degree: 3, n_points: 120, x_range: [-2.5, 2.5], noise_variance: 0.09, seed: 17}
+  - name: PolynomialRegressionObjective
+    params: {dataset_kind: nonlinear, degree: 4, n_points: 120, x_range: [-2.5, 2.5], noise_variance: 0.09, seed: 17}
+  - name: PolynomialRegressionObjective
+    params: {dataset_kind: nonlinear, degree: 5, n_points: 120, x_range: [-2.5, 2.5], noise_variance: 0.09, seed: 17}
+
+  - name: PolynomialRegressionObjective
+    params: {dataset_kind: nonlinear, degree: 5, n_points: 120, x_range: [-2.5, 2.5], noise_variance: 0.09, seed: 17, lambda_l1: 0.001}
+  - name: PolynomialRegressionObjective
+    params: {dataset_kind: nonlinear, degree: 5, n_points: 120, x_range: [-2.5, 2.5], noise_variance: 0.09, seed: 17, lambda_l1: 0.01}
+  - name: PolynomialRegressionObjective
+    params: {dataset_kind: nonlinear, degree: 5, n_points: 120, x_range: [-2.5, 2.5], noise_variance: 0.09, seed: 17, lambda_l1: 0.1}
+  - name: PolynomialRegressionObjective
+    params: {dataset_kind: nonlinear, degree: 5, n_points: 120, x_range: [-2.5, 2.5], noise_variance: 0.09, seed: 17, lambda_l1: 1.0}
+  - name: PolynomialRegressionObjective
+    params: {dataset_kind: nonlinear, degree: 5, n_points: 120, x_range: [-2.5, 2.5], noise_variance: 0.09, seed: 17, lambda_l2: 0.001}
+  - name: PolynomialRegressionObjective
+    params: {dataset_kind: nonlinear, degree: 5, n_points: 120, x_range: [-2.5, 2.5], noise_variance: 0.09, seed: 17, lambda_l2: 0.01}
+  - name: PolynomialRegressionObjective
+    params: {dataset_kind: nonlinear, degree: 5, n_points: 120, x_range: [-2.5, 2.5], noise_variance: 0.09, seed: 17, lambda_l2: 0.1}
+  - name: PolynomialRegressionObjective
+    params: {dataset_kind: nonlinear, degree: 5, n_points: 120, x_range: [-2.5, 2.5], noise_variance: 0.09, seed: 17, lambda_l2: 1.0}
+  - name: PolynomialRegressionObjective
+    params: {dataset_kind: nonlinear, degree: 5, n_points: 120, x_range: [-2.5, 2.5], noise_variance: 0.09, seed: 17, lambda_l1: 0.001, lambda_l2: 0.001}
+  - name: PolynomialRegressionObjective
+    params: {dataset_kind: nonlinear, degree: 5, n_points: 120, x_range: [-2.5, 2.5], noise_variance: 0.09, seed: 17, lambda_l1: 0.01, lambda_l2: 0.01}
+  - name: PolynomialRegressionObjective
+    params: {dataset_kind: nonlinear, degree: 5, n_points: 120, x_range: [-2.5, 2.5], noise_variance: 0.09, seed: 17, lambda_l1: 0.1, lambda_l2: 0.1}
+  - name: PolynomialRegressionObjective
+    params: {dataset_kind: nonlinear, degree: 5, n_points: 120, x_range: [-2.5, 2.5], noise_variance: 0.09, seed: 17, lambda_l1: 1.0, lambda_l2: 1.0}
+
+optimizers:
+  - name: AnalyticalLinearRegression1D
+  - name: StochasticGradientDescent
+  - name: MiniBatchGradientDescent
+  - name: MiniBatchGradientDescent
+    params: {study_dataset_kind: nonlinear, study_degree: 5, study_unregularized: true}
+    param_grid:
+      values:
+        batch_size: [1, 4, 8, 16, 32, 64, 120]
+  - name: GaussNewton
+  - name: LevenbergMarquardt
+
+base_config:
+  max_iter: 120
+  max_epochs: 80
+  tol_grad: 1.0e-8
+  tol_step: 1.0e-12
+  learning_rate: 0.03
+  batch_size: 16
+  step_rule: sqrt_decay
+  lr_decay: 1.0e-3
+  seed: 123
+  shuffle: true
+  lm_damping_initial: 1.0e-3
+  lm_damping_up: 10.0
+  lm_damping_down: 0.3
+  lm_damping_min: 1.0e-12
+  lm_damping_max: 1.0e+12
+
+stopping_tolerances: [1.0e-8]
+parallel: false
+output_dir: outputs/lab5
+
+experiment_grid:
+  datasets:
+    near_linear:
+      true_dependency: "f_true(x) = 1.6*x - 0.7 + 0.1*sin(3*x)"
+      x_range: [-3.0, 3.0]
+      noise_variance: 0.04
+      seed: 11
+      n_points: 120
+    nonlinear:
+      true_dependency: "0.35*x^3 - 0.8*x + sin(2.8*x) + local Gaussian peak"
+      x_range: [-2.5, 2.5]
+      noise_variance: 0.09
+      seed: 17
+      n_points: 120
+  polynomial_degrees: [1, 2, 3, 4, 5]
+  regularization:
+    regularize_intercept: false
+    l1_delta: 1.0e-6
+    lambda_values: [0.001, 0.01, 0.1, 1.0]
+  batch_sizes: [1, 4, 8, 16, 32, 64, 120]
+  learning_rates: [0.01, 0.03]
+  batch_study:
+    dataset_kind: nonlinear
+    degree: 5
+    seed: 17
+  regularization_study:
+    dataset_kind: nonlinear
+    degree: 5
+    seed: 17
+
+plots:
+  predictions: true
+  histories: true
+  batch_sizes: true
+  regularization: true
+  coefficients: true
+  method_comparison: true
+  selected_optimizer_for_predictions: LevenbergMarquardt
+  history_optimizers: [StochasticGradientDescent, MiniBatchGradientDescent, GaussNewton, LevenbergMarquardt]

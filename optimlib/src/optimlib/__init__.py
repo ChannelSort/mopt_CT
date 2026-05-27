@@ -8,5 +8,7 @@ from optimlib.core.base import OptimizationResult, StepState
 from optimlib.optimizers import univariate as _univariate
 from optimlib.optimizers import gradient as _gradient
 from optimlib.optimizers import adaptive as _adaptive
+from optimlib.optimizers import second_order as _second_order
+from optimlib.optimizers import regression as _regression
 
 __all__ = ["OptimizationResult", "StepState"]

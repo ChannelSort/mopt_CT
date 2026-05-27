@@ -52,6 +52,7 @@ class OptimizationResult:
         n_iter: Number of completed iterations.
         n_calls: Number of objective evaluations.
         n_grad_calls: Number of gradient evaluations.
+        n_hessian_calls: Number of Hessian evaluations.
         converged: Whether a stopping criterion was met.
         message: Termination reason.
         history: Step snapshots, usually collected by ``HistoryCallback``.
@@ -67,6 +68,7 @@ class OptimizationResult:
     message: str
     history: Sequence[StepState] = field(default_factory=tuple)
     metadata: Mapping[str, Any] = field(default_factory=dict)
+    n_hessian_calls: int = 0
 
     def __post_init__(self) -> None:
         """Copy result arrays and history."""

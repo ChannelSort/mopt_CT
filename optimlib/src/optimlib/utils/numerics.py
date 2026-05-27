@@ -46,6 +46,25 @@ def approximate_derivative(func: Callable[[float], float], x: float, h: float = 
     return (float(func(x + h)) - float(func(x - h))) / (2.0 * h)
 
 
+def approximate_hessian_from_gradient(
+    gradient: Callable[[FloatArray], FloatArray],
+    x: FloatArray,
+    h: float = 1e-5,
+) -> FloatArray:
+    """Approximate Hessian by central differences of the gradient."""
+    if h <= 0.0:
+        raise ValueError("h must be positive.")
+    x_vec = as_float_vector(x)
+    dim = x_vec.size
+    hessian = np.empty((dim, dim), dtype=np.float64)
+    for idx in range(dim):
+        step = np.zeros_like(x_vec)
+        step[idx] = h
+        hessian[:, idx] = (gradient(x_vec + step) - gradient(x_vec - step)) / (2.0 * h)
+    result: FloatArray = np.asarray(0.5 * (hessian + hessian.T), dtype=np.float64)
+    return result
+
+
 def check_condition_number(hessian_approx: FloatArray) -> float:
     """Return matrix condition number in the 2-norm."""
     matrix = np.asarray(hessian_approx, dtype=np.float64)

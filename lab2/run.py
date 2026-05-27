@@ -6,6 +6,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,7 +22,7 @@ from optimlib.utils.registry import GLOBAL_REGISTRY
 from optimlib.visualization.plotting import plot_contours_and_trajectories, plot_convergence
 
 
-def _variant_basename(function_name: str, function_params: dict) -> str:
+def _variant_basename(function_name: str, function_params: dict[str, Any]) -> str:
     """Filesystem-safe basename for a function instance (e.g. different x0)."""
     if not function_params:
         return function_name

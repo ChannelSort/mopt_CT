@@ -127,10 +127,12 @@ class OptimizationExperiment:
                 "n_iter": None if result is None else result.n_iter,
                 "n_calls": None if result is None else result.n_calls,
                 "n_grad_calls": None if result is None else result.n_grad_calls,
+                "n_hessian_calls": None if result is None else result.n_hessian_calls,
                 "message": run.error if result is None else result.message,
                 "error": run.error,
             }
             row.update({f"param_{key}": value for key, value in run.params.items()})
+            row.update({f"function_{key}": value for key, value in run.function_params.items()})
             rows.append(row)
         return pd.DataFrame(rows)
 

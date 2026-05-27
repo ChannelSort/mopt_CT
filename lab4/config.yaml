@@ -1,0 +1,164 @@
+functions:
+  - name: GeneratedQuadratic
+    params: {n: 2, k: 1, seed: 0, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 2, k: 1, seed: 1, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 2, k: 10, seed: 0, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 2, k: 10, seed: 1, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 2, k: 100, seed: 0, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 2, k: 100, seed: 1, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 2, k: 1000, seed: 0, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 2, k: 1000, seed: 1, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 10, k: 1, seed: 0, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 10, k: 1, seed: 1, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 10, k: 10, seed: 0, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 10, k: 10, seed: 1, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 10, k: 100, seed: 0, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 10, k: 100, seed: 1, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 10, k: 1000, seed: 0, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 10, k: 1000, seed: 1, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 50, k: 1, seed: 0, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 50, k: 1, seed: 1, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 50, k: 10, seed: 0, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 50, k: 10, seed: 1, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 50, k: 100, seed: 0, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 50, k: 100, seed: 1, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 50, k: 1000, seed: 0, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 50, k: 1000, seed: 1, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 100, k: 1, seed: 0, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 100, k: 1, seed: 1, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 100, k: 10, seed: 0, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 100, k: 10, seed: 1, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 100, k: 100, seed: 0, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 100, k: 100, seed: 1, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 100, k: 1000, seed: 0, random_orthogonal: true}
+  - name: GeneratedQuadratic
+    params: {n: 100, k: 1000, seed: 1, random_orthogonal: true}
+
+  - name: Quadratic2DVisualization
+    params: {seed: 42, x_star: [1.0, -1.0], x0: [-8.0, -6.0]}
+  - name: Quadratic2DVisualization
+    params: {seed: 42, x_star: [1.0, -1.0], x0: [8.0, 5.0]}
+  - name: Quadratic2DVisualization
+    params: {seed: 42, x_star: [1.0, -1.0], x0: [-4.0, 7.0]}
+  - name: Quadratic2DVisualization
+    params: {seed: 42, x_star: [1.0, -1.0], x0: [4.0, -8.0]}
+  - name: Quadratic2DVisualization
+    params: {seed: 42, x_star: [1.0, -1.0], x0: [0.0, 4.0]}
+
+  - name: Lab4Rosenbrock
+    params: {x0: [-1.2, 1.0]}
+  - name: Lab4Rosenbrock
+    params: {x0: [-2.0, 2.0]}
+  - name: Lab4Rosenbrock
+    params: {x0: [2.0, 2.0]}
+  - name: Lab4Himmelblau
+    params: {x0: [2.0, 2.0]}
+  - name: Lab4Himmelblau
+    params: {x0: [-2.0, 3.0]}
+  - name: Lab4Himmelblau
+    params: {x0: [0.0, 0.0]}
+  - name: Lab4Ackley
+    params: {x0: [1.0, 1.0]}
+  - name: Lab4Ackley
+    params: {x0: [2.5, -2.0]}
+  - name: Lab4Ackley
+    params: {x0: [0.1, 0.1]}
+
+optimizers:
+  - name: QuadraticConjugateGradient
+  - name: FletcherReeves
+  - name: PolakRibiere
+  - name: NewtonCholesky
+  - name: NewtonDirectionChoice
+  - name: PowellDogLeg
+  - name: DFP
+  - name: BFGS
+  - name: LBFGS
+    param_grid:
+      values:
+        m: [3, 5, 10]
+  - name: ScipyNewtonCG
+
+base_config:
+  max_iter: 800
+  max_evaluations: 1000000
+  tol_step: 1.0e-12
+  alpha_init: 1.0
+  c1: 1.0e-4
+  c2: 0.9
+  rho: 0.5
+  max_backtrack: 50
+  line_search: strong_wolfe
+  curvature_eps: 1.0e-12
+  restart_every: 0
+  polak_ribiere_plus: true
+  hessian_shift: 1.0e-8
+  hessian_shift_max_attempts: 8
+  trust_radius_initial: 1.0
+  trust_radius_max: 100.0
+  trust_eta: 0.1
+  trust_shrink: 0.25
+  trust_expand: 2.0
+  predicted_reduction_eps: 1.0e-16
+
+stopping_tolerances: [1.0e-8]
+parallel: false
+output_dir: outputs/lab4
+
+experiment_grid:
+  quadratics:
+    n: [2, 10, 50, 100]
+    k: [1, 10, 100, 1000]
+    seed: [0, 1]
+  visualization:
+    n: 2
+    k: 10
+    start_points:
+      - [-8.0, -6.0]
+      - [8.0, 5.0]
+      - [-4.0, 7.0]
+      - [4.0, -8.0]
+      - [0.0, 4.0]
+
+plots:
+  metrics: [n_iter, n_calls, n_grad_calls, n_hessian_calls]
+  tables: true
+  dependencies: true
+  comparison: true
+  trajectories: true
+  trajectory_tolerance: 1.0e-8
+  trajectory_functions: [Quadratic2DVisualization, Lab4Rosenbrock, Lab4Himmelblau, Lab4Ackley]
+  lbfgs_memory: true
+  lbfgs_memory_function:
+    name: GeneratedQuadratic
+    params: {n: 50, k: 100, seed: 0, random_orthogonal: true}

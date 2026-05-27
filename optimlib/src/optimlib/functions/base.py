@@ -8,8 +8,8 @@ from typing import Any
 import numpy as np
 
 from optimlib.core.base import FloatArray, ObjectiveFunction
-from optimlib.utils.numerics import approximate_derivative, approximate_gradient
-from optimlib.utils.validation import as_float_scalar, as_float_vector, ensure_finite, ensure_gradient
+from optimlib.utils.numerics import approximate_derivative, approximate_gradient, approximate_hessian_from_gradient
+from optimlib.utils.validation import as_float_scalar, as_float_vector, ensure_finite, ensure_gradient, ensure_hessian
 
 
 class CallableCounterMixin:
@@ -19,11 +19,13 @@ class CallableCounterMixin:
         """Initialize counters."""
         self._call_count = 0
         self._grad_count = 0
+        self._hessian_count = 0
 
     def reset_count(self) -> None:
         """Reset objective and gradient call counters."""
         self._call_count = 0
         self._grad_count = 0
+        self._hessian_count = 0
 
     @property
     def call_count(self) -> int:
@@ -35,11 +37,19 @@ class CallableCounterMixin:
         """Return gradient call count."""
         return self._grad_count
 
+    @property
+    def hessian_count(self) -> int:
+        """Return Hessian call count."""
+        return self._hessian_count
+
     def _increment_call_count(self, amount: int = 1) -> None:
         self._call_count += amount
 
     def _increment_grad_count(self) -> None:
         self._grad_count += 1
+
+    def _increment_hessian_count(self) -> None:
+        self._hessian_count += 1
 
 
 class UnivariateFunction(CallableCounterMixin, ObjectiveFunction, ABC):
@@ -100,6 +110,10 @@ class MultivariateFunction(CallableCounterMixin, ObjectiveFunction, ABC):
 
     def __call__(self, x: Any) -> float:
         """Evaluate objective at a vector point."""
+        return self.evaluate(x)
+
+    def evaluate(self, x: Any) -> float:
+        """Evaluate objective at a vector point."""
         x_vec = as_float_vector(x, dim=self.dim)
         self._increment_call_count()
         return ensure_finite(self._evaluate(x_vec), name=f"{self.name}(x)")
@@ -113,6 +127,12 @@ class MultivariateFunction(CallableCounterMixin, ObjectiveFunction, ABC):
         x_vec = as_float_vector(x, dim=self.dim)
         self._increment_grad_count()
         return ensure_gradient(approximate_gradient(self, x_vec), dim=self.dim)
+
+    def hessian(self, x: Any) -> FloatArray:
+        """Return analytic Hessian or central finite-difference fallback."""
+        x_vec = as_float_vector(x, dim=self.dim)
+        self._increment_hessian_count()
+        return ensure_hessian(approximate_hessian_from_gradient(self.gradient, x_vec), dim=self.dim)
 
     def initial_point(self) -> FloatArray:
         """Return a copy of the configured initial point."""

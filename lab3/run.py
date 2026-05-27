@@ -6,6 +6,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,7 +22,7 @@ from optimlib.utils.registry import GLOBAL_REGISTRY
 from optimlib.visualization.plotting import plot_contours_and_trajectories, plot_param_sensitivity
 
 
-def _variant_basename(function_name: str, function_params: dict) -> str:
+def _variant_basename(function_name: str, function_params: dict[str, Any]) -> str:
     if not function_params:
         return function_name
     compact = json.dumps(function_params, sort_keys=True, separators=(",", ":"))
@@ -37,7 +38,8 @@ def _best_runs_per_optimizer(runs: list[ExperimentRun]) -> list[ExperimentRun]:
     for r in pool:
         assert r.result is not None
         prev = by_opt.get(r.optimizer_name)
-        if prev is None or r.result.n_iter < prev.result.n_iter:
+        prev_result = None if prev is None else prev.result
+        if prev is None or prev_result is None or r.result.n_iter < prev_result.n_iter:
             by_opt[r.optimizer_name] = r
     return list(by_opt.values())
 

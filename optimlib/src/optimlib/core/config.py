@@ -113,6 +113,7 @@ class ExperimentConfig(BaseModel):
     parallel: bool = False
     output_dir: Path = Path("outputs")
     plots: dict[str, Any] = Field(default_factory=dict)
+    experiment_grid: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("stopping_tolerances")
     @classmethod

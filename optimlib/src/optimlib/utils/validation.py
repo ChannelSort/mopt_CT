@@ -42,3 +42,13 @@ def ensure_finite(value: float, name: str = "value") -> float:
 def ensure_gradient(gradient: Any, dim: int) -> FloatArray:
     """Validate and return a flat finite gradient vector."""
     return as_float_vector(gradient, dim=dim)
+
+
+def ensure_hessian(hessian: Any, dim: int) -> FloatArray:
+    """Validate and return a finite square Hessian matrix."""
+    matrix = np.asarray(hessian, dtype=np.float64)
+    if matrix.shape != (dim, dim):
+        raise ValueError(f"Expected Hessian shape ({dim}, {dim}), got {matrix.shape}.")
+    if not np.all(np.isfinite(matrix)):
+        raise FunctionEvaluationError("Hessian contains NaN or Inf.")
+    return matrix
