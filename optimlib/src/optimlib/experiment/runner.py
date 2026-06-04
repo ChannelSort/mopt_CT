@@ -12,7 +12,7 @@ import pandas as pd
 
 from optimlib.core.base import OptimizationResult
 from optimlib.core.config import ExperimentConfig, FunctionConfig, OptimizerConfig, OptimizerSpec
-from optimlib.experiment.serialization import save_dataframe
+from optimlib.experiment.csv_serialization import save_dataframe_csv
 from optimlib.utils.registry import GLOBAL_REGISTRY, Registry
 
 
@@ -138,4 +138,4 @@ class OptimizationExperiment:
 
     def save_tables(self, stem: str = "summary") -> dict[str, Path]:
         """Save aggregate CSV, JSON, and LaTeX tables."""
-        return save_dataframe(self.to_dataframe(), self.config.output_dir, stem=stem)
+        return save_dataframe_csv(self.to_dataframe(), self.config.output_dir, stem=stem)

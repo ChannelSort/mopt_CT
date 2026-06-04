@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Callable, Mapping, Sequence
-from typing import Any, cast
+from collections.abc import Mapping, Sequence
+from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
 
@@ -20,52 +20,96 @@ from optimlib.utils.validation import as_float_vector, ensure_finite, ensure_gra
 LossComponents = Mapping[str, float]
 
 
-def _config_float(config: OptimizerConfig, name: str, default: float) -> float:
-    return float(getattr(config, name, default))
+@runtime_checkable
+class LossComponentsFunction(Protocol):
+    """Objective with an explicit loss decomposition."""
+
+    def loss_components(self, x: FloatArray) -> LossComponents:
+        """Return full loss decomposition."""
 
 
-def _config_int(config: OptimizerConfig, name: str, default: int) -> int:
-    return int(getattr(config, name, default))
+@runtime_checkable
+class SampleGradientFunction(Protocol):
+    """Objective that can compute mini-batch gradients."""
+
+    def sample_gradient(self, w: FloatArray, indices: FloatArray) -> FloatArray:
+        """Return one mini-batch gradient estimate."""
 
 
-def _config_bool(config: OptimizerConfig, name: str, default: bool) -> bool:
-    return bool(getattr(config, name, default))
+@runtime_checkable
+class LeastSquaresFunction(Protocol):
+    """Objective exposing residuals and residual Jacobian."""
+
+    def residuals(self, w: FloatArray) -> FloatArray:
+        """Return residual vector."""
+
+    def jacobian(self, w: FloatArray) -> FloatArray:
+        """Return residual Jacobian."""
+
+
+@runtime_checkable
+class RegularizedLeastSquaresFunction(Protocol):
+    """Objective exposing smooth regularization derivatives."""
+
+    def regularization_gradient(self, w: FloatArray) -> FloatArray:
+        """Return regularization gradient."""
+
+    def regularization_hessian_diag(self, w: FloatArray) -> FloatArray:
+        """Return diagonal of the regularization Hessian."""
+
+
+@runtime_checkable
+class AnalyticalRegressionFunction(Protocol):
+    """Objective that supports a closed-form linear-regression solution."""
+
+    def can_analytic_solution(self) -> bool:
+        """Whether the analytical solution is applicable."""
+
+    def analytic_solution(self) -> FloatArray:
+        """Return analytical model parameters."""
+
+
+@runtime_checkable
+class RegressionDatasetFunction(Protocol):
+    """Regression objective metadata used by stochastic optimizers."""
+
+    n_samples: int
+    dataset_kind: str
+    degree: int
+    lambda_l1: float
+    lambda_l2: float
 
 
 def _hessian_count(func: MultivariateFunction) -> int:
-    return int(getattr(func, "hessian_count", 0))
+    return func.hessian_count
 
 
 def _loss_components(func: MultivariateFunction, x: FloatArray) -> dict[str, float]:
-    method = getattr(func, "loss_components", None)
-    if callable(method):
-        components = cast(Callable[[FloatArray], LossComponents], method)(x)
+    if isinstance(func, LossComponentsFunction):
+        components = func.loss_components(x)
         return {str(key): float(value) for key, value in components.items()}
     value = func(x)
     return {"loss": value, "empirical_risk": value, "l1_term": 0.0, "l2_term": 0.0}
 
 
 def _sample_gradient(func: MultivariateFunction, x: FloatArray, indices: FloatArray) -> FloatArray:
-    method = getattr(func, "sample_gradient", None)
-    if callable(method):
-        gradient = cast(Callable[[FloatArray, FloatArray], FloatArray], method)(x, indices)
+    if isinstance(func, SampleGradientFunction):
+        gradient = func.sample_gradient(x, indices)
         return ensure_gradient(gradient, dim=func.dim)
     return ensure_gradient(func.gradient(x), dim=func.dim)
 
 
 def _residuals(func: MultivariateFunction, x: FloatArray) -> FloatArray:
-    method = getattr(func, "residuals", None)
-    if not callable(method):
+    if not isinstance(func, LeastSquaresFunction):
         raise TypeError("Gauss-Newton optimizers require residuals(x).")
-    residuals = cast(Callable[[FloatArray], FloatArray], method)(x)
+    residuals = func.residuals(x)
     return np.asarray(residuals, dtype=np.float64).reshape(-1)
 
 
 def _jacobian(func: MultivariateFunction, x: FloatArray) -> FloatArray:
-    method = getattr(func, "jacobian", None)
-    if not callable(method):
+    if not isinstance(func, LeastSquaresFunction):
         raise TypeError("Gauss-Newton optimizers require jacobian(x).")
-    jacobian = np.asarray(cast(Callable[[FloatArray], FloatArray], method)(x), dtype=np.float64)
+    jacobian = np.asarray(func.jacobian(x), dtype=np.float64)
     if jacobian.ndim != 2 or jacobian.shape[1] != func.dim:
         raise ValueError(f"Expected Jacobian with {func.dim} columns, got {jacobian.shape}.")
     if not np.all(np.isfinite(jacobian)):
@@ -74,16 +118,14 @@ def _jacobian(func: MultivariateFunction, x: FloatArray) -> FloatArray:
 
 
 def _regularization_gradient(func: MultivariateFunction, x: FloatArray) -> FloatArray:
-    method = getattr(func, "regularization_gradient", None)
-    if callable(method):
-        return ensure_gradient(cast(Callable[[FloatArray], FloatArray], method)(x), dim=func.dim)
+    if isinstance(func, RegularizedLeastSquaresFunction):
+        return ensure_gradient(func.regularization_gradient(x), dim=func.dim)
     return np.zeros(func.dim, dtype=np.float64)
 
 
 def _regularization_hessian_diag(func: MultivariateFunction, x: FloatArray) -> FloatArray:
-    method = getattr(func, "regularization_hessian_diag", None)
-    if callable(method):
-        diag = np.asarray(cast(Callable[[FloatArray], FloatArray], method)(x), dtype=np.float64).reshape(-1)
+    if isinstance(func, RegularizedLeastSquaresFunction):
+        diag = np.asarray(func.regularization_hessian_diag(x), dtype=np.float64).reshape(-1)
         if diag.shape != (func.dim,):
             raise ValueError(f"Expected regularization Hessian diagonal shape ({func.dim},), got {diag.shape}.")
         return diag
@@ -157,8 +199,9 @@ class AnalyticalLinearRegression1D(_RegressionOptimizer):
     def minimize(self, func: ObjectiveFunction, config: OptimizerConfig) -> OptimizationResult:
         objective = self._as_multivariate(func)
         history, callbacks, started_at = self._start()
-        can_solve = getattr(objective, "can_analytic_solution", None)
-        if callable(can_solve) and not bool(cast(Callable[[], bool], can_solve)()):
+        if not isinstance(objective, AnalyticalRegressionFunction):
+            raise TypeError("AnalyticalLinearRegression1D requires analytic_solution().")
+        if not objective.can_analytic_solution():
             x0 = objective.initial_point()
             f0 = ensure_finite(objective(x0), "objective")
             grad0 = ensure_gradient(objective.gradient(x0), dim=objective.dim)
@@ -189,10 +232,7 @@ class AnalyticalLinearRegression1D(_RegressionOptimizer):
                 {"epochs": 0, "step_rule": "closed_form"},
             )
             return self._finish(callbacks, result)
-        method = getattr(objective, "analytic_solution", None)
-        if not callable(method):
-            raise TypeError("AnalyticalLinearRegression1D requires analytic_solution().")
-        x = ensure_gradient(cast(Callable[[], FloatArray], method)(), dim=objective.dim)
+        x = ensure_gradient(objective.analytic_solution(), dim=objective.dim)
         f_value = ensure_finite(objective(x), "objective")
         grad = ensure_gradient(objective.gradient(x), dim=objective.dim)
         components = _loss_components(objective, x)
@@ -247,13 +287,13 @@ class StochasticGradientDescent(_RegressionOptimizer):
             result = self._result(objective, x, f_value, 0, True, "Initial point satisfies gradient tolerance.", history, started_at)
             return self._finish(callbacks, result)
 
-        n_samples = _config_int(config, "n_samples", int(getattr(objective, "n_samples", 1)))
-        max_epochs = _config_int(config, "max_epochs", config.max_iter)
-        learning_rate = _config_float(config, "learning_rate", config.alpha)
-        step_rule = str(getattr(config, "step_rule", "constant"))
-        lr_decay = _config_float(config, "lr_decay", 0.0)
-        seed = _config_int(config, "seed", 0)
-        shuffle = _config_bool(config, "shuffle", True)
+        n_samples = config.n_samples or (objective.n_samples if isinstance(objective, RegressionDatasetFunction) else 1)
+        max_epochs = config.max_epochs
+        learning_rate = config.learning_rate
+        step_rule = config.step_rule
+        lr_decay = config.lr_decay
+        seed = config.seed
+        shuffle = config.shuffle
         rng = np.random.default_rng(seed)
         batch_size = max(1, min(n_samples, self._batch_size(objective, config)))
         converged = False
@@ -349,14 +389,17 @@ class MiniBatchGradientDescent(StochasticGradientDescent):
 
     def minimize(self, func: ObjectiveFunction, config: OptimizerConfig) -> OptimizationResult:
         objective = self._as_multivariate(func)
-        if self.study_dataset_kind is not None and getattr(objective, "dataset_kind", None) != self.study_dataset_kind:
-            return self._not_applicable(objective, config)
-        if self.study_degree is not None and int(getattr(objective, "degree", -1)) != self.study_degree:
-            return self._not_applicable(objective, config)
-        if self.study_unregularized and (
-            float(getattr(objective, "lambda_l1", 0.0)) != 0.0 or float(getattr(objective, "lambda_l2", 0.0)) != 0.0
-        ):
-            return self._not_applicable(objective, config)
+        study_requires_metadata = self.study_dataset_kind is not None or self.study_degree is not None or self.study_unregularized
+        if study_requires_metadata:
+            if not isinstance(objective, RegressionDatasetFunction):
+                return self._not_applicable(objective, config)
+            regression_objective: RegressionDatasetFunction = objective
+            if self.study_dataset_kind is not None and regression_objective.dataset_kind != self.study_dataset_kind:
+                return self._not_applicable(objective, config)
+            if self.study_degree is not None and regression_objective.degree != self.study_degree:
+                return self._not_applicable(objective, config)
+            if self.study_unregularized and (regression_objective.lambda_l1 != 0.0 or regression_objective.lambda_l2 != 0.0):
+                return self._not_applicable(objective, config)
         return super().minimize(objective, config)
 
     def _not_applicable(self, objective: MultivariateFunction, config: OptimizerConfig) -> OptimizationResult:
@@ -389,13 +432,13 @@ class MiniBatchGradientDescent(StochasticGradientDescent):
             "mini_batch_study_not_applicable",
             history,
             started_at,
-            {"epochs": 0, "batch_size": self._batch_size(objective, config), "step_rule": str(getattr(config, "step_rule", "constant"))},
+            {"epochs": 0, "batch_size": self._batch_size(objective, config), "step_rule": config.step_rule},
         )
         return self._finish(callbacks, result)
 
     def _batch_size(self, func: MultivariateFunction, config: OptimizerConfig) -> int:
-        requested = _config_int(config, "batch_size", 16)
-        n_samples = _config_int(config, "n_samples", int(getattr(func, "n_samples", requested)))
+        requested = config.batch_size
+        n_samples = config.n_samples or (func.n_samples if isinstance(func, RegressionDatasetFunction) else requested)
         return max(1, min(n_samples, requested))
 
 
@@ -414,11 +457,11 @@ class GaussNewton(_RegressionOptimizer):
         f_value = ensure_finite(objective(x), "initial objective")
         grad = ensure_gradient(objective.gradient(x), dim=objective.dim)
         grad_norm = float(np.linalg.norm(grad))
-        damping = _config_float(config, "lm_damping_initial", 1e-3)
-        damping_up = _config_float(config, "lm_damping_up", 10.0)
-        damping_down = _config_float(config, "lm_damping_down", 0.3)
-        min_damping = _config_float(config, "lm_damping_min", 1e-12)
-        max_damping = _config_float(config, "lm_damping_max", 1e12)
+        damping = config.lm_damping_initial
+        damping_up = config.lm_damping_up
+        damping_down = config.lm_damping_down
+        min_damping = config.lm_damping_min
+        max_damping = config.lm_damping_max
         converged = grad_norm <= config.tol_grad
         message = "Initial point satisfies gradient tolerance." if converged else "Maximum iterations reached."
         n_iter = 0

@@ -12,7 +12,7 @@ from lab2.functions import WellConditionedQuadratic
 from optimlib.core.config import ExperimentConfig, OptimizerConfig
 from optimlib.experiment.runner import OptimizationExperiment
 from optimlib.optimizers.gradient import ArmijoBacktracking
-from optimlib.visualization.plotting import plot_contours_and_trajectories
+from optimlib.visualization.contour import plot_contours_and_trajectories
 
 
 def test_lab2_yaml_validates() -> None:

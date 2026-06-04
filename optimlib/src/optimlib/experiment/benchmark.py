@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import pandas as pd
 
 from optimlib.experiment.runner import ExperimentRun
@@ -9,7 +11,7 @@ from optimlib.experiment.runner import ExperimentRun
 
 def best_by_calls(runs: list[ExperimentRun]) -> pd.DataFrame:
     """Return successful runs sorted by objective and gradient calls."""
-    rows = []
+    rows: list[dict[str, object]] = []
     for run in runs:
         if run.result is None or not run.result.converged:
             continue
@@ -23,4 +25,5 @@ def best_by_calls(runs: list[ExperimentRun]) -> pd.DataFrame:
                 "f": run.result.f,
             }
         )
-    return pd.DataFrame(rows).sort_values(["function", "n_calls", "n_grad_calls"])
+    dataframe = cast(pd.DataFrame, pd.DataFrame(rows).sort_values(["function", "n_calls", "n_grad_calls"]))
+    return dataframe

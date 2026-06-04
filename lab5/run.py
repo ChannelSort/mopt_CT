@@ -23,7 +23,7 @@ import lab5.functions  # noqa: F401,E402
 from optimlib.experiment.runner import ExperimentRun, OptimizationExperiment  # noqa: E402
 from optimlib.functions.base import MultivariateFunction  # noqa: E402
 from optimlib.utils.registry import GLOBAL_REGISTRY  # noqa: E402
-from optimlib.visualization.plotting import (  # noqa: E402
+from optimlib.visualization.regression import (  # noqa: E402
     plot_lab5_batch_size_comparison,
     plot_lab5_coefficients,
     plot_lab5_loss_by_gradient_calls,

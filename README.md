@@ -71,6 +71,88 @@ DFP, BFGS, L-BFGS и сравнение со `scipy.optimize.minimize(method="Ne
 Elastic Net. Методы оптимизации: аналитическое решение одномерной линейной
 регрессии, SGD, mini-batch GD, Гаусса–Ньютона и Гаусса–Ньютона с регуляризацией Левенберга–Марквардта.
 
+## Архитектурные заметки
+
+Визуализация разделена на тематические модули:
+
+```text
+optimlib/src/optimlib/visualization/
++-- base.py          # общие helper-функции
++-- contour.py       # линии уровня и траектории
++-- convergence.py   # графики сходимости и чувствительности параметров
++-- lab2.py          # графики, специфичные для ЛР2
++-- lab4.py          # графики, специфичные для ЛР4
++-- regression.py    # графики регрессии для ЛР5
++-- plotting.py      # совместимый re-export старых импортов
+```
+
+Слой сохранения таблиц сейчас поддерживает только CSV. Основная реализация
+находится в `optimlib.experiment.csv_serialization`; модуль
+`optimlib.experiment.serialization` оставлен как совместимый re-export для
+старого кода.
+
+## Как добавить новый метод оптимизации
+
+1. Выберите подходящий уровень абстракции. Для одномерного поиска используйте
+   `IntervalOptimizer`, для классических градиентных методов можно наследоваться
+   от `GradientOptimizer`, для методов со своей логикой достаточно реализовать
+   интерфейс `Optimizer.minimize(func, config)`.
+2. Метод должен принимать `ObjectiveFunction` и `OptimizerConfig`, возвращать
+   `OptimizationResult`, а траекторию записывать через `StepState`.
+3. Зарегистрируйте метод через `register_optimizer("name", OptimizerClass)`.
+4. Если методу нужны параметры, добавьте явные поля в `OptimizerConfig`, чтобы
+   конфиг был типобезопасным и проверялся mypy.
+5. Для графиков добавляйте общий код в `visualization/convergence.py`,
+   `contour.py` или `base.py`; лабораторно-специфичный код держите в отдельном
+   модуле вроде `visualization/lab4.py`.
+6. Добавьте быстрые тесты в `optimlib/tests`: сходимость на простой функции,
+   корректность истории и отсутствие численных регрессий.
+
+Минимальный пример:
+
+```python
+from optimlib.core.base import ObjectiveFunction, OptimizationResult, StepState
+from optimlib.core.callbacks import HistoryCallback
+from optimlib.core.config import OptimizerConfig
+from optimlib.functions.base import MultivariateFunction
+from optimlib.utils.registry import register_optimizer
+
+
+class MyGradientMethod:
+    name = "MyGradientMethod"
+
+    def minimize(self, func: ObjectiveFunction, config: OptimizerConfig) -> OptimizationResult:
+        if not isinstance(func, MultivariateFunction):
+            raise TypeError("MyGradientMethod requires a MultivariateFunction.")
+        history = HistoryCallback()
+        history.on_start()
+        x = func.initial_point()
+        f_value = func(x)
+        grad = func.gradient(x)
+        for iteration in range(config.max_iter):
+            x = x - config.alpha * grad
+            f_value = func(x)
+            grad = func.gradient(x)
+            state = StepState(iteration, x, f_value, grad, config.alpha)
+            history.on_step(state)
+            if float((grad @ grad) ** 0.5) <= config.tol_grad:
+                break
+        return OptimizationResult(
+            x=x,
+            f=f_value,
+            n_iter=len(history.history),
+            n_calls=func.call_count,
+            n_grad_calls=func.grad_count,
+            converged=True,
+            message="finished",
+            history=history.history,
+            metadata={"optimizer": self.name},
+        )
+
+
+register_optimizer("my_gradient_method", MyGradientMethod)
+```
+
 ## Проверки
 
 ```powershell

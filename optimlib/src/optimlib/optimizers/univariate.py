@@ -138,7 +138,7 @@ class PassiveSearch(IntervalOptimizer):
     ) -> OptimizationResult:
         a, b = interval
         n_segments = max(2, int(math.ceil(2.0 * (b - a) / config.tol)))
-        max_evaluations = int(getattr(config, "max_evaluations", 1_000_000))
+        max_evaluations = config.max_evaluations
         n_points = n_segments + 1
         capped = n_points > max_evaluations
         if capped:

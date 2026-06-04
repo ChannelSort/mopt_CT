@@ -20,8 +20,8 @@ import lab4.functions  # noqa: F401,E402
 from optimlib.experiment.runner import ExperimentRun, OptimizationExperiment  # noqa: E402
 from optimlib.functions.base import MultivariateFunction  # noqa: E402
 from optimlib.utils.registry import GLOBAL_REGISTRY  # noqa: E402
-from optimlib.visualization.plotting import (  # noqa: E402
-    plot_contours_and_trajectories,
+from optimlib.visualization.contour import plot_contours_and_trajectories  # noqa: E402
+from optimlib.visualization.lab4 import (  # noqa: E402
     plot_lab4_lbfgs_memory,
     plot_lab4_metric_dependencies,
     plot_lab4_metric_tables,

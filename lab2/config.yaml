@@ -29,6 +29,7 @@ optimizers:
   - SteepestDescent
 base_config:
   max_iter: 2000
+  max_evaluations: 10000
   alpha_init: 1.0
   c1: 1.0e-4
   c2: 0.9

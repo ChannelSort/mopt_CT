@@ -14,6 +14,7 @@ from optimlib.core.config import OptimizerConfig
 from optimlib.exceptions import FunctionEvaluationError, LineSearchError, StopOptimization
 from optimlib.functions.base import MultivariateFunction, UnivariateFunction
 from optimlib.optimizers.univariate import GoldenSection
+from optimlib.utils.numerics import max_abs, safe_norm
 from optimlib.utils.registry import register_optimizer
 from optimlib.utils.validation import as_float_vector, ensure_finite, ensure_gradient
 
@@ -83,7 +84,7 @@ class GradientOptimizer(ABC):
         x = func.initial_point()
         f_value = ensure_finite(func(x), "initial objective")
         grad = ensure_gradient(func.gradient(x), dim=func.dim)
-        converged = float(np.linalg.norm(grad)) <= config.tol_grad
+        converged = safe_norm(grad) <= config.tol_grad
         message = "Initial point satisfies gradient tolerance." if converged else "Maximum iterations reached."
         n_iter = 0
 
@@ -91,25 +92,35 @@ class GradientOptimizer(ABC):
             for iteration in range(config.max_iter):
                 if converged:
                     break
+                if func.call_count + func.grad_count >= config.max_evaluations:
+                    message = f"Evaluation budget reached: {func.call_count + func.grad_count}."
+                    break
                 direction = self._search_direction(grad)
                 alpha = self._compute_step(func, x, f_value, grad, direction, config)
                 if not np.isfinite(alpha) or alpha <= 0.0:
                     raise LineSearchError(f"Invalid step size: {alpha}")
                 x_next = as_float_vector(x + alpha * direction, dim=func.dim)
+                x_next_abs = max_abs(x_next)
+                if x_next_abs > config.max_coordinate_abs:
+                    message = f"Coordinate magnitude limit reached before accepting step: {x_next_abs:.3e}."
+                    break
                 f_next = ensure_finite(func(x_next), "objective")
+                if abs(f_next) > config.max_objective_abs:
+                    message = f"Objective magnitude limit reached before accepting step: {abs(f_next):.3e}."
+                    break
                 grad_next = ensure_gradient(func.gradient(x_next), dim=func.dim)
+                grad_norm = safe_norm(grad_next)
                 state = StepState(
                     iteration=iteration,
                     x=x_next,
                     f=f_next,
                     grad=grad_next,
                     step_size=alpha,
-                    extra_metrics={"grad_norm": float(np.linalg.norm(grad_next))},
+                    extra_metrics={"grad_norm": grad_norm},
                 )
                 n_iter = iteration + 1
-                step_norm = float(np.linalg.norm(x_next - x))
+                step_norm = safe_norm(x_next - x)
                 x, f_value, grad = x_next, f_next, grad_next
-                grad_norm = float(np.linalg.norm(grad))
                 for callback in callbacks:
                     callback.on_step(state)
                 if grad_norm <= config.tol_grad:
@@ -120,9 +131,15 @@ class GradientOptimizer(ABC):
                     converged = True
                     message = f"Step tolerance reached: {step_norm:.3e}."
                     break
+                if func.call_count + func.grad_count >= config.max_evaluations:
+                    message = f"Evaluation budget reached: {func.call_count + func.grad_count}."
+                    break
         except StopOptimization as exc:
             message = exc.message
             converged = True
+        except (FunctionEvaluationError, LineSearchError, FloatingPointError, OverflowError) as exc:
+            message = f"Numerical failure: {exc}"
+            converged = False
 
         result = OptimizationResult(
             x=x,

@@ -1,15 +1,11 @@
-"""Serialization helpers for experiment results."""
+"""Backward-compatible CSV serialization imports.
+
+The experiment layer currently supports CSV table serialization only.
+New code should import from ``optimlib.experiment.csv_serialization``.
+"""
 
 from __future__ import annotations
 
-from pathlib import Path
+from optimlib.experiment.csv_serialization import save_dataframe, save_dataframe_csv
 
-import pandas as pd
-
-
-def save_dataframe(dataframe: pd.DataFrame, output_dir: Path, stem: str = "summary") -> dict[str, Path]:
-    """Save a DataFrame to CSV."""
-    output_dir.mkdir(parents=True, exist_ok=True)
-    csv_path = output_dir / f"{stem}.csv"
-    dataframe.to_csv(csv_path, index=False)
-    return {"csv": csv_path}
+__all__ = ["save_dataframe", "save_dataframe_csv"]

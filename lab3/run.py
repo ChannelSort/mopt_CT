@@ -19,7 +19,8 @@ import optimlib  # noqa: F401,E402
 import lab3.functions  # noqa: F401,E402
 from optimlib.experiment.runner import ExperimentRun, OptimizationExperiment
 from optimlib.utils.registry import GLOBAL_REGISTRY
-from optimlib.visualization.plotting import plot_contours_and_trajectories, plot_param_sensitivity
+from optimlib.visualization.contour import plot_contours_and_trajectories
+from optimlib.visualization.convergence import plot_param_sensitivity
 
 
 def _variant_basename(function_name: str, function_params: dict[str, Any]) -> str:

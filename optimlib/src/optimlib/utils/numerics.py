@@ -73,8 +73,35 @@ def check_condition_number(hessian_approx: FloatArray) -> float:
     return float(np.linalg.cond(matrix))
 
 
+def safe_norm(values: FloatArray) -> float:
+    """Return a Euclidean norm without overflowing on large finite vectors."""
+    array = np.asarray(values, dtype=np.float64)
+    if array.size == 0:
+        return 0.0
+    if not np.all(np.isfinite(array)):
+        return float("inf")
+    scale = float(np.max(np.abs(array)))
+    if scale == 0.0:
+        return 0.0
+    if not np.isfinite(scale):
+        return float("inf")
+    with np.errstate(over="ignore", invalid="ignore"):
+        norm = scale * float(np.linalg.norm(array / scale))
+    return norm if np.isfinite(norm) else float("inf")
+
+
+def max_abs(values: FloatArray) -> float:
+    """Return the largest absolute entry, treating non-finite values as infinity."""
+    array = np.asarray(values, dtype=np.float64)
+    if array.size == 0:
+        return 0.0
+    if not np.all(np.isfinite(array)):
+        return float("inf")
+    return float(np.max(np.abs(array)))
+
+
 def is_converged(state: StepState, config: OptimizerConfig) -> bool:
     """Check gradient and step convergence criteria."""
-    grad_ok = state.grad is not None and float(np.linalg.norm(state.grad)) <= config.tol_grad
+    grad_ok = state.grad is not None and safe_norm(state.grad) <= config.tol_grad
     step_ok = state.step_size is not None and abs(state.step_size) <= config.tol_step
     return grad_ok or step_ok

@@ -19,20 +19,8 @@ from optimlib.utils.registry import register_optimizer
 from optimlib.utils.validation import as_float_vector, ensure_finite, ensure_gradient, ensure_hessian
 
 
-def _config_float(config: OptimizerConfig, name: str, default: float) -> float:
-    return float(getattr(config, name, default))
-
-
-def _config_int(config: OptimizerConfig, name: str, default: int) -> int:
-    return int(getattr(config, name, default))
-
-
-def _config_bool(config: OptimizerConfig, name: str, default: bool) -> bool:
-    return bool(getattr(config, name, default))
-
-
 def _hessian_count(func: MultivariateFunction) -> int:
-    return int(getattr(func, "hessian_count", 0))
+    return func.hessian_count
 
 
 def _armijo_step(
@@ -66,7 +54,7 @@ def _line_search_step(
     direction: FloatArray,
     config: OptimizerConfig,
 ) -> float:
-    mode = str(getattr(config, "line_search", "strong_wolfe")).strip().lower()
+    mode = config.line_search.strip().lower()
     if mode in {"none", "full", "unit"}:
         return 1.0
     if mode == "armijo":
@@ -196,7 +184,7 @@ class QuadraticConjugateGradient(_Lab4Optimizer):
         converged = False
         message = "Maximum iterations reached."
         n_iter = 0
-        curvature_eps = _config_float(config, "curvature_eps", 1e-14)
+        curvature_eps = config.curvature_eps
 
         try:
             for iteration in range(config.max_iter):
@@ -264,7 +252,7 @@ class _NonlinearConjugateGradient(_Lab4Optimizer, ABC):
         converged = False
         message = "Maximum iterations reached."
         n_iter = 0
-        restart_every = _config_int(config, "restart_every", objective.dim)
+        restart_every = config.restart_every
 
         try:
             for iteration in range(config.max_iter):
@@ -325,7 +313,7 @@ class FletcherReeves(_NonlinearConjugateGradient):
 
     def _beta(self, grad: FloatArray, grad_next: FloatArray, config: OptimizerConfig) -> float:
         denom = float(np.dot(grad, grad))
-        if denom <= _config_float(config, "curvature_eps", 1e-14):
+        if denom <= config.curvature_eps:
             return 0.0
         return float(np.dot(grad_next, grad_next)) / denom
 
@@ -337,12 +325,17 @@ class PolakRibiere(_NonlinearConjugateGradient):
 
     def _beta(self, grad: FloatArray, grad_next: FloatArray, config: OptimizerConfig) -> float:
         denom = float(np.dot(grad, grad))
-        if denom <= _config_float(config, "curvature_eps", 1e-14):
+        if denom <= config.curvature_eps:
             return 0.0
         beta = float(np.dot(grad_next, grad_next - grad)) / denom
-        if _config_bool(config, "polak_ribiere_plus", True):
+        if config.polak_ribiere_plus:
             return max(0.0, beta)
         return beta
+
+
+ConjugateGradientQuadratic = QuadraticConjugateGradient
+FletcherReevesCG = FletcherReeves
+PolakRibiereCG = PolakRibiere
 
 
 class NewtonCholesky(_Lab4Optimizer):
@@ -422,8 +415,8 @@ class NewtonDirectionChoice(_Lab4Optimizer):
         except np.linalg.LinAlgError:
             pass
 
-        delta = _config_float(config, "hessian_shift", 1e-8)
-        max_attempts = _config_int(config, "hessian_shift_max_attempts", 8)
+        delta = config.hessian_shift
+        max_attempts = config.hessian_shift_max_attempts
         min_eig = float(np.min(np.linalg.eigvalsh(matrix)))
         shift = max(delta, -min_eig + delta)
         identity = np.eye(grad.size, dtype=np.float64)
@@ -536,11 +529,11 @@ class PowellDogLeg(_Lab4Optimizer):
         f_value = ensure_finite(objective(x), "initial objective")
         grad = ensure_gradient(objective.gradient(x), dim=objective.dim)
         grad_norm = float(np.linalg.norm(grad))
-        radius = _config_float(config, "trust_radius_initial", _config_float(config, "initial_trust_radius", 1.0))
-        max_radius = _config_float(config, "trust_radius_max", _config_float(config, "max_trust_radius", 100.0))
-        eta = _config_float(config, "trust_eta", _config_float(config, "eta", 0.1))
-        shrink = _config_float(config, "trust_shrink", 0.25)
-        expand = _config_float(config, "trust_expand", 2.0)
+        radius = config.trust_radius_initial
+        max_radius = config.trust_radius_max
+        eta = config.trust_eta
+        shrink = config.trust_shrink
+        expand = config.trust_expand
 
         if grad_norm <= config.tol_grad:
             result = self._result(objective, x, f_value, 0, True, "Initial point satisfies gradient tolerance.", history)
@@ -557,7 +550,7 @@ class PowellDogLeg(_Lab4Optimizer):
                 step, step_kind = self._dog_leg_step(grad, hessian, radius)
                 step_norm = float(np.linalg.norm(step))
                 predicted = -float(np.dot(grad, step) + 0.5 * np.dot(step, hessian @ step))
-                if predicted <= _config_float(config, "predicted_reduction_eps", 1e-16):
+                if predicted <= config.predicted_reduction_eps:
                     message = "non_positive_predicted_reduction"
                     break
                 f_trial = ensure_finite(objective(x + step), "objective")
@@ -731,7 +724,7 @@ class DFP(_InverseQuasiNewton):
         ys: float,
         config: OptimizerConfig,
     ) -> tuple[FloatArray, bool]:
-        eps = _config_float(config, "curvature_eps", 1e-12)
+        eps = config.curvature_eps
         if ys <= eps * max(1.0, float(np.linalg.norm(s)) * float(np.linalg.norm(y))):
             return inverse_hessian, False
         hy = inverse_hessian @ y
@@ -755,7 +748,7 @@ class BFGS(_InverseQuasiNewton):
         ys: float,
         config: OptimizerConfig,
     ) -> tuple[FloatArray, bool]:
-        eps = _config_float(config, "curvature_eps", 1e-12)
+        eps = config.curvature_eps
         if ys <= eps * max(1.0, float(np.linalg.norm(s)) * float(np.linalg.norm(y))):
             return inverse_hessian, False
         rho = 1.0 / ys
@@ -778,8 +771,7 @@ class LBFGS(_Lab4Optimizer):
         self.m = m
 
     def _memory_size(self, config: OptimizerConfig) -> int:
-        memory = _config_int(config, "m", self.m)
-        memory = _config_int(config, "lbfgs_m", memory)
+        memory = config.lbfgs_m if config.lbfgs_m is not None else config.m
         return max(1, memory)
 
     def _direction(
@@ -850,7 +842,7 @@ class LBFGS(_Lab4Optimizer):
                 grad_next = ensure_gradient(objective.gradient(x_next), dim=objective.dim)
                 y = grad_next - grad
                 ys = float(np.dot(y, step))
-                eps = _config_float(config, "curvature_eps", 1e-12)
+                eps = config.curvature_eps
                 updated = ys > eps * max(1.0, float(np.linalg.norm(step)) * float(np.linalg.norm(y)))
                 if updated:
                     if len(s_history) == memory:
@@ -985,8 +977,11 @@ for _cls in (
 
 register_optimizer("quadratic_conjugate_gradient", QuadraticConjugateGradient)
 register_optimizer("conjugate_gradient_quadratic", QuadraticConjugateGradient)
+register_optimizer("ConjugateGradientQuadratic", QuadraticConjugateGradient)
 register_optimizer("fletcher_reeves", FletcherReeves)
+register_optimizer("FletcherReevesCG", FletcherReeves)
 register_optimizer("polak_ribiere", PolakRibiere)
+register_optimizer("PolakRibiereCG", PolakRibiere)
 register_optimizer("newton_cholesky", NewtonCholesky)
 register_optimizer("newton_direction_choice", NewtonDirectionChoice)
 register_optimizer("powell_dog_leg", PowellDogLeg)
