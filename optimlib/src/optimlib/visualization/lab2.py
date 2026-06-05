@@ -9,15 +9,21 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from matplotlib.colors import LogNorm
 
 from optimlib.experiment.runner import ExperimentRun
 from optimlib.functions.base import MultivariateFunction
 from optimlib.visualization.base import safe_stem
-from optimlib.visualization.contour import _history_points
+from optimlib.visualization.contour import plot_trajectory_contours
 
 
 _ACKLEY_CONSTANT_ALPHAS = (0.1, 0.01, 0.001)
+_COMPLEX_FUNCTIONS = ("Ackley", "Rosenbrock", "Himmelblau")
+_OPTIMIZER_LABELS = {
+    "ConstantStepGD": "ConstantStepGD",
+    "ArmijoBacktracking": "Armijo",
+    "StrongWolfe": "Strong Wolfe",
+    "SteepestDescent": "Steepest Descent",
+}
 
 
 def _ackley_run_label(run: ExperimentRun) -> str:
@@ -28,6 +34,33 @@ def _ackley_run_label(run: ExperimentRun) -> str:
         "StrongWolfe": "Strong Wolfe",
         "SteepestDescent": "Steepest descent",
     }.get(run.optimizer_name, run.optimizer_name)
+
+
+def _latex_escape(value: object) -> str:
+    text = "" if value is None else str(value)
+    replacements = {
+        "\\": r"\textbackslash{}",
+        "&": r"\&",
+        "%": r"\%",
+        "$": r"\$",
+        "#": r"\#",
+        "_": r"\_",
+        "{": r"\{",
+        "}": r"\}",
+        "~": r"\textasciitilde{}",
+        "^": r"\textasciicircum{}",
+    }
+    return "".join(replacements.get(char, char) for char in text)
+
+
+def _format_float(value: float | None) -> str:
+    if value is None or not np.isfinite(value):
+        return "--"
+    if value == 0.0:
+        return "0"
+    if abs(value) < 1e-3 or abs(value) >= 1e4:
+        return f"{value:.3e}"
+    return f"{value:.6g}"
 
 
 def _is_selected_ackley_run(run: ExperimentRun, tolerance: float) -> bool:
@@ -55,25 +88,6 @@ def plot_lab2_ackley_trajectories(
     if not selected:
         return {}
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    x_min, x_max, y_min, y_max = -3.0, 1.2, -3.0, 1.2
-    xs = np.linspace(x_min, x_max, 360)
-    ys = np.linspace(y_min, y_max, 360)
-    xx, yy = np.meshgrid(xs, ys)
-    with np.errstate(over="ignore", invalid="ignore"):
-        values = np.array(
-            [func(np.array([x, y], dtype=np.float64)) for x, y in zip(xx.ravel(), yy.ravel(), strict=True)]
-        ).reshape(xx.shape)
-    z_plot = np.maximum(values, 1e-8)
-    finite = z_plot[np.isfinite(z_plot)]
-    vmax = float(np.max(finite)) if finite.size else 1.0
-    levels = np.geomspace(1e-8, max(vmax, 1e-7), 70)
-
-    fig, ax = plt.subplots(figsize=(8.2, 6.2))
-    contour = ax.contourf(xx, yy, z_plot, levels=levels, cmap="viridis", norm=LogNorm(vmin=1e-8, vmax=max(vmax, 1e-7)))
-    ax.contour(xx, yy, z_plot, levels=levels[::6], colors="black", linewidths=0.25, alpha=0.25, norm=LogNorm())
-    fig.colorbar(contour, ax=ax, label="f(x)")
-
     order = {
         ("ConstantStepGD", 0.1): 0,
         ("ConstantStepGD", 0.01): 1,
@@ -87,46 +101,20 @@ def plot_lab2_ackley_trajectories(
         alpha = float(run.params["alpha"]) if run.optimizer_name == "ConstantStepGD" else None
         return order.get((run.optimizer_name, alpha), 99)
 
-    styles = ["#d55e00", "#009e73", "#0072b2", "#cc79a7", "#f0e442", "#56b4e9"]
-    linestyles = ["-", "-", "-", "--", "-.", ":"]
-    for index, run in enumerate(sorted(selected, key=sort_key)):
-        points = _history_points(run)
-        if points.size == 0:
-            continue
-        mask = (points[:, 0] >= x_min) & (points[:, 0] <= x_max) & (points[:, 1] >= y_min) & (points[:, 1] <= y_max)
-        points = points[mask]
-        if points.size == 0:
-            continue
-        ax.plot(
-            points[:, 0],
-            points[:, 1],
-            color=styles[index % len(styles)],
-            linestyle=linestyles[index % len(linestyles)],
-            linewidth=1.8,
-            marker="o",
-            markersize=3.0,
-            markevery=max(1, points.shape[0] // 18),
-            label=_ackley_run_label(run),
-        )
-
-    x0 = func.initial_point()
-    ax.scatter(x0[0], x0[1], marker="X", s=90, c="white", edgecolors="black", linewidths=1.0, label="start")
-    ax.scatter(0.0, 0.0, marker="*", s=160, c="gold", edgecolors="black", linewidths=0.9, label="min (0,0)")
-    ax.text(x0[0] + 0.08, x0[1] - 0.16, r"$x_0=(-2,-2)$", color="white", fontsize=9, weight="bold")
-
-    ax.set_xlim(x_min, x_max)
-    ax.set_ylim(y_min, y_max)
-    ax.set_title("Ackley: trajectories")
-    ax.set_xlabel("x")
-    ax.set_ylabel("y")
-    ax.grid(True, alpha=0.18)
-    ax.legend(loc="upper right", fontsize=7, framealpha=0.88, ncol=2, borderpad=0.45, handlelength=2.0)
-    plt.tight_layout()
-
-    png = output_dir / f"{basename}.png"
-    fig.savefig(png, dpi=300)
-    plt.close(fig)
-    return {"png": png}
+    return plot_trajectory_contours(
+        func,
+        sorted(selected, key=sort_key),
+        output_dir,
+        basename,
+        title="Ackley: trajectories",
+        run_label=_ackley_run_label,
+        grid_size=360,
+        filled_levels=70,
+        legend_fontsize=7.0,
+        legend_loc="upper right",
+        legend_ncol=2,
+        start_text=r"$x_0=(-2,-2)$",
+    )
 
 
 def plot_lab2_constant_step_alpha(
@@ -228,3 +216,54 @@ def plot_lab2_tolerance_dependencies(
         plt.close(fig)
         paths[metric] = png
     return paths
+
+
+def save_lab2_complex_summary_table(
+    results: list[ExperimentRun],
+    table_dir: Path,
+    tolerance: float = 1e-8,
+) -> Path:
+    """Save compact Lab 2 summary table for non-quadratic functions."""
+    table_dir.mkdir(parents=True, exist_ok=True)
+    path = table_dir / "complex_summary.tex"
+    lines = [
+        r"\begin{table}[H]",
+        r"\centering",
+        r"\caption{Результаты на сложных функциях при $\varepsilon=10^{-8}$}",
+        r"\fitreporttable{%",
+        r"\begin{tabular}{llrrrr}",
+        r"\toprule",
+        r"Функция & Метод & Успешных запусков & Мин. итераций & Мин. вызовов $f$ & Лучшее $f(x_k)$\\",
+        r"\midrule",
+    ]
+    for function_name in _COMPLEX_FUNCTIONS:
+        for optimizer_name in _OPTIMIZER_LABELS:
+            subset = [
+                run
+                for run in results
+                if run.function_name == function_name
+                and run.optimizer_name == optimizer_name
+                and run.result is not None
+                and abs(run.tolerance - tolerance) <= 1e-12 * max(1.0, abs(tolerance))
+            ]
+            converged_count = sum(1 for run in subset if run.result is not None and run.result.converged)
+            converged = [run for run in subset if run.result is not None and run.result.converged]
+            iterations = min((run.result.n_iter for run in converged if run.result is not None), default=None)
+            f_calls = min((run.result.n_calls for run in converged if run.result is not None), default=None)
+            best_f = min((run.result.f for run in subset if run.result is not None and np.isfinite(run.result.f)), default=None)
+            lines.append(
+                " & ".join(
+                    [
+                        _latex_escape(function_name),
+                        _latex_escape(_OPTIMIZER_LABELS[optimizer_name]),
+                        str(converged_count),
+                        "--" if iterations is None else str(iterations),
+                        "--" if f_calls is None else str(f_calls),
+                        _format_float(best_f),
+                    ]
+                )
+                + r"\\"
+            )
+    lines.extend([r"\bottomrule", r"\end{tabular}%", r"}", r"\end{table}"])
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path

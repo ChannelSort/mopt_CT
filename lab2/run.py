@@ -25,6 +25,7 @@ from optimlib.visualization.lab2 import (
     plot_lab2_ackley_trajectories,
     plot_lab2_constant_step_alpha,
     plot_lab2_tolerance_dependencies,
+    save_lab2_complex_summary_table,
 )
 
 
@@ -145,7 +146,7 @@ def main() -> None:
     plot_lab2_tolerance_dependencies(runs, plot_dir)
     print(f"Lab 2 completed: {len(runs)} runs")
     table_paths = experiment.save_tables()
-    table_paths["summary_report_scaled"] = _save_summary_report_table(experiment)
+    table_paths["complex_summary"] = save_lab2_complex_summary_table(runs, experiment.config.output_dir / "tables", tolerance=traj_tol)
     for name, path in table_paths.items():
         print(f"{name}: {path}")
 

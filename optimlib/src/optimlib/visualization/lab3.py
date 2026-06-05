@@ -6,13 +6,11 @@ import math
 from pathlib import Path
 from typing import Any
 
-import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.colors import LogNorm
 
 from optimlib.experiment.runner import ExperimentRun
 from optimlib.functions.base import MultivariateFunction
-from optimlib.visualization.contour import _history_points, _limits
+from optimlib.visualization.contour import plot_trajectory_contours
 
 
 INERTIAL_OPTIMIZERS = ("Momentum", "Nesterov")
@@ -133,14 +131,6 @@ def _iteration_cell(run: ExperimentRun | None) -> str:
     return f"{run.result.n_iter}{suffix}"
 
 
-def _plot_limits(func: MultivariateFunction, runs: list[ExperimentRun]) -> tuple[float, float, float, float]:
-    if func.name == "Ackley":
-        return -3.2, 3.2, -3.2, 3.2
-    if func.name == "Himmelblau":
-        return -5.0, 5.0, -5.0, 5.0
-    return _limits(func, runs)
-
-
 def _plot_group(
     func: MultivariateFunction,
     runs: list[ExperimentRun],
@@ -148,75 +138,16 @@ def _plot_group(
     basename: str,
     title: str,
 ) -> Path:
-    output_dir.mkdir(parents=True, exist_ok=True)
-    x_min, x_max, y_min, y_max = _plot_limits(func, runs)
-    xs = np.linspace(x_min, x_max, 260)
-    ys = np.linspace(y_min, y_max, 260)
-    xx, yy = np.meshgrid(xs, ys)
-    with np.errstate(over="ignore", invalid="ignore"):
-        values = np.array(
-            [func(np.array([x, y], dtype=np.float64)) for x, y in zip(xx.ravel(), yy.ravel(), strict=True)]
-        ).reshape(xx.shape)
-    finite = values[np.isfinite(values)]
-    if finite.size == 0:
-        values = np.zeros_like(xx, dtype=np.float64)
-        finite = values.reshape(-1)
-    positive = finite[finite > 0.0]
-    use_log = positive.size > 0 and float(np.max(positive) / np.min(positive)) > 1e3
-
-    fig, ax = plt.subplots(figsize=(8.2, 6.2))
-    if use_log:
-        z_plot = np.maximum(values, max(float(np.min(positive)), 1e-10))
-        contour = ax.contourf(xx, yy, z_plot, levels=55, cmap="viridis", norm=LogNorm())
-        ax.contour(xx, yy, z_plot, levels=14, colors="black", linewidths=0.25, alpha=0.25, norm=LogNorm())
-    else:
-        contour = ax.contourf(xx, yy, values, levels=55, cmap="viridis")
-        ax.contour(xx, yy, values, levels=14, colors="black", linewidths=0.25, alpha=0.25)
-    fig.colorbar(contour, ax=ax, label="f(x)")
-
-    colors = ["#d55e00", "#0072b2", "#009e73", "#cc79a7", "#f0e442", "#56b4e9"]
-    linestyles = ["-", "--", "-.", ":", "-", "--"]
-    for index, run in enumerate(runs):
-        points = _history_points(run)
-        if points.size == 0:
-            continue
-        mask = (points[:, 0] >= x_min) & (points[:, 0] <= x_max) & (points[:, 1] >= y_min) & (points[:, 1] <= y_max)
-        points = points[mask]
-        if points.size == 0:
-            continue
-        color = colors[index % len(colors)]
-        mark_every = max(1, points.shape[0] // 16)
-        ax.plot(
-            points[:, 0],
-            points[:, 1],
-            color=color,
-            linestyle=linestyles[index % len(linestyles)],
-            linewidth=1.8,
-            marker="o",
-            markersize=2.8,
-            markevery=mark_every,
-            label=f"{run.optimizer_name}: {_compact_params(run.params)}",
-        )
-        ax.scatter(points[-1, 0], points[-1, 1], marker="s", s=42, color=color, edgecolors="black", linewidths=0.7)
-
-    start = func.initial_point()
-    ax.scatter(start[0], start[1], marker="X", s=100, c="white", edgecolors="black", linewidths=1.1, label="start")
-    for minimizer in func.global_minimizers:
-        ax.scatter(minimizer[0], minimizer[1], marker="*", s=170, c="gold", edgecolors="black", linewidths=0.9)
-    ax.scatter([], [], marker="*", s=130, c="gold", edgecolors="black", linewidths=0.9, label="global min")
-    ax.scatter([], [], marker="s", s=42, c="white", edgecolors="black", linewidths=0.7, label="final")
-    ax.set_xlim(x_min, x_max)
-    ax.set_ylim(y_min, y_max)
-    ax.set_title(title)
-    ax.set_xlabel("x")
-    ax.set_ylabel("y")
-    ax.grid(True, alpha=0.18)
-    ax.legend(fontsize=6.6, loc="best", framealpha=0.88)
-    plt.tight_layout()
-    path = output_dir / f"{basename}.png"
-    fig.savefig(path, dpi=300)
-    plt.close(fig)
-    return path
+    paths = plot_trajectory_contours(
+        func,
+        runs,
+        output_dir,
+        basename,
+        title=title,
+        run_label=lambda run: f"{run.optimizer_name}: {_compact_params(run.params)}",
+        legend_fontsize=6.6,
+    )
+    return paths["png"]
 
 
 def plot_lab3_grouped_trajectories(
