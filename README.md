@@ -71,26 +71,6 @@ DFP, BFGS, L-BFGS и сравнение со `scipy.optimize.minimize(method="Ne
 Elastic Net. Методы оптимизации: аналитическое решение одномерной линейной
 регрессии, SGD, mini-batch GD, Гаусса–Ньютона и Гаусса–Ньютона с регуляризацией Левенберга–Марквардта.
 
-## Архитектурные заметки
-
-Визуализация разделена на тематические модули:
-
-```text
-optimlib/src/optimlib/visualization/
-+-- base.py          # общие helper-функции
-+-- contour.py       # линии уровня и траектории
-+-- convergence.py   # графики сходимости и чувствительности параметров
-+-- lab2.py          # графики, специфичные для ЛР2
-+-- lab4.py          # графики, специфичные для ЛР4
-+-- regression.py    # графики регрессии для ЛР5
-+-- plotting.py      # совместимый re-export старых импортов
-```
-
-Слой сохранения таблиц сейчас поддерживает только CSV. Основная реализация
-находится в `optimlib.experiment.csv_serialization`; модуль
-`optimlib.experiment.serialization` оставлен как совместимый re-export для
-старого кода.
-
 ## Как добавить новый метод оптимизации
 
 1. Выберите подходящий уровень абстракции. Для одномерного поиска используйте
@@ -159,4 +139,12 @@ register_optimizer("my_gradient_method", MyGradientMethod)
 cd optimlib
 ..\.venv\Scripts\python.exe -m pytest
 ..\.venv\Scripts\python.exe -m mypy src ..\lab1 ..\lab2 ..\lab3 ..\lab4 ..\lab5
+```
+
+## Компиляция `.tex` файлов
+
+```powershell
+cd lab3
+pdflatex -interaction=nonstopmode -halt-on-error Report_demoN.tex
+pdflatex -interaction=nonstopmode -halt-on-error Report_demoN
 ```

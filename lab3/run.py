@@ -19,8 +19,13 @@ import optimlib  # noqa: F401,E402
 import lab3.functions  # noqa: F401,E402
 from optimlib.experiment.runner import ExperimentRun, OptimizationExperiment
 from optimlib.utils.registry import GLOBAL_REGISTRY
-from optimlib.visualization.contour import plot_contours_and_trajectories
 from optimlib.visualization.convergence import plot_param_sensitivity
+from optimlib.visualization.lab3 import (
+    save_lab3_complex_tables,
+    save_lab3_quadratic_best_table,
+    save_lab3_quadratic_sensitivity_tables,
+    plot_lab3_grouped_trajectories,
+)
 
 
 def _variant_basename(function_name: str, function_params: dict[str, Any]) -> str:
@@ -75,7 +80,8 @@ def main() -> None:
 
         adam = [run for run in family if run.optimizer_name == "Adam"]
         if adam:
-            plot_param_sensitivity(adam, plot_dir, "beta1", "beta2", basename=f"{stem}_Adam_heatmap")
+            adam_alpha = [run for run in adam if abs(float(run.params.get("alpha", 0.0)) - 1.0e-2) <= 1e-12]
+            plot_param_sensitivity(adam_alpha or adam, plot_dir, "beta1", "beta2", basename=f"{stem}_Adam_heatmap")
 
         traj_runs = [
             run
@@ -83,11 +89,15 @@ def main() -> None:
             if run.result is not None
             and abs(run.tolerance - traj_tol) <= tol_scale
         ]
-        best = _best_runs_per_optimizer(traj_runs)
-        plot_contours_and_trajectories(func, best, plot_dir, f"{stem}_best_trajectories")
+        plot_lab3_grouped_trajectories(func, traj_runs, plot_dir, stem)
 
     print(f"Lab 3 completed: {len(runs)} runs")
-    for name, path in experiment.save_tables().items():
+    table_dir = experiment.config.output_dir / "tables"
+    table_paths: dict[str, Path] = {}
+    table_paths["quadratic_best"] = save_lab3_quadratic_best_table(runs, table_dir)
+    table_paths["quadratic_sensitivity"] = save_lab3_quadratic_sensitivity_tables(runs, table_dir)
+    table_paths.update({f"complex_{name}": path for name, path in save_lab3_complex_tables(runs, table_dir).items()})
+    for name, path in {**experiment.save_tables(), **table_paths}.items():
         print(f"{name}: {path}")
 
 
