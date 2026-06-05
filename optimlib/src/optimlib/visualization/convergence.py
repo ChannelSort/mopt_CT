@@ -50,6 +50,10 @@ def plot_param_sensitivity(
     y_param: str | None = None,
     metric: str = "n_iter",
     basename: str = "param_sensitivity",
+    title: str | None = None,
+    max_iter: int | None = None,
+    y_label: str | None = None,
+    y_log: bool = False,
 ) -> dict[str, Path]:
     """Plot line sensitivity for one parameter or heatmap for two parameters."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -65,9 +69,40 @@ def plot_param_sensitivity(
     fig, ax = plt.subplots(figsize=(7, 5))
     if y_param is None:
         sns.lineplot(data=data, x=x_param, y=metric, marker="o", ax=ax)
+        if x_param == "alpha":
+            ax.set_xscale("log")
+        if metric == "n_iter":
+            inferred_limit = max_iter or int(np.nanmax(data[metric]))
+            ax.set_ylim(0.0, inferred_limit * 1.05)
+            ax.axhline(inferred_limit, color="black", linestyle="--", linewidth=1.0, alpha=0.65, label=f"max_iter = {inferred_limit}")
+            values = data[metric].dropna().to_numpy(dtype=float)
+            if values.size > 0 and np.allclose(values, values[0]):
+                message = "all runs reached max_iter" if max_iter is not None and np.allclose(values, max_iter) else "all runs have same n_iter"
+                ax.text(
+                    0.5,
+                    0.08,
+                    message,
+                    transform=ax.transAxes,
+                    ha="center",
+                    va="bottom",
+                    fontsize=9,
+                    bbox={"boxstyle": "round,pad=0.25", "facecolor": "white", "alpha": 0.8, "edgecolor": "0.5"},
+                )
+            ax.legend(fontsize=8)
+        elif y_log:
+            positive = data[metric][data[metric] > 0]
+            if not positive.empty:
+                ax.set_yscale("log")
+        ax.set_xlabel(x_param)
+        ax.set_ylabel(y_label or metric)
     else:
         pivot = data.pivot_table(index=y_param, columns=x_param, values=metric, aggfunc="mean")
         sns.heatmap(pivot, annot=True, fmt=".3g", cmap="magma", ax=ax)
+        ax.set_xlabel(x_param)
+        ax.set_ylabel(y_param)
+    if title:
+        ax.set_title(title)
+    ax.grid(True, which="both", alpha=0.25) if y_param is None else None
     plt.tight_layout()
     png = output_dir / f"{basename}.png"
     fig.savefig(png, dpi=300)

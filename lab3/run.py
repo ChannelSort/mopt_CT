@@ -24,6 +24,7 @@ from optimlib.visualization.lab3 import (
     save_lab3_complex_tables,
     save_lab3_quadratic_best_table,
     save_lab3_quadratic_sensitivity_tables,
+    plot_lab3_quadratic_convergence,
     plot_lab3_grouped_trajectories,
 )
 
@@ -54,6 +55,7 @@ def main() -> None:
     """Execute Lab 3, save sensitivity plots and best-run trajectories per objective."""
     experiment = OptimizationExperiment.from_yaml(Path(__file__).with_name("config.yaml"))
     traj_tol = float(experiment.config.plots.get("trajectory_tolerance", 1e-8))
+    max_iter = int(experiment.config.base_config.max_iter)
     runs = experiment.execute()
     plot_dir = experiment.config.output_dir / "plots"
     tol_scale = 1e-12 * max(1.0, abs(traj_tol))
@@ -72,11 +74,51 @@ def main() -> None:
 
         ada_grad = [run for run in family if run.optimizer_name == "AdaGrad"]
         if ada_grad:
-            plot_param_sensitivity(ada_grad, plot_dir, "alpha", None, basename=f"{stem}_AdaGrad_sensitivity")
+            plot_param_sensitivity(
+                ada_grad,
+                plot_dir,
+                "alpha",
+                None,
+                basename=f"{stem}_AdaGrad_sensitivity",
+                title=f"{function_config.name}: AdaGrad n_iter ({max_iter} = max_iter reached)",
+                max_iter=max_iter,
+                y_label="iterations",
+            )
+            plot_param_sensitivity(
+                ada_grad,
+                plot_dir,
+                "alpha",
+                None,
+                metric="f",
+                basename=f"{stem}_AdaGrad_final_f",
+                title=f"{function_config.name}: AdaGrad final f(x_k)",
+                y_label=r"$f(x_k)$",
+                y_log=True,
+            )
 
         ada_delta = [run for run in family if run.optimizer_name == "AdaDelta"]
         if ada_delta:
-            plot_param_sensitivity(ada_delta, plot_dir, "rho", None, basename=f"{stem}_AdaDelta_sensitivity")
+            plot_param_sensitivity(
+                ada_delta,
+                plot_dir,
+                "rho",
+                None,
+                basename=f"{stem}_AdaDelta_sensitivity",
+                title=f"{function_config.name}: AdaDelta n_iter ({max_iter} = max_iter reached)",
+                max_iter=max_iter,
+                y_label="iterations",
+            )
+            plot_param_sensitivity(
+                ada_delta,
+                plot_dir,
+                "rho",
+                None,
+                metric="f",
+                basename=f"{stem}_AdaDelta_final_f",
+                title=f"{function_config.name}: AdaDelta final f(x_k)",
+                y_label=r"$f(x_k)$",
+                y_log=True,
+            )
 
         adam = [run for run in family if run.optimizer_name == "Adam"]
         if adam:
@@ -90,6 +132,8 @@ def main() -> None:
             and abs(run.tolerance - traj_tol) <= tol_scale
         ]
         plot_lab3_grouped_trajectories(func, traj_runs, plot_dir, stem)
+        if function_config.name in {"WellConditionedQuadratic", "IllConditionedQuadratic"}:
+            plot_lab3_quadratic_convergence(traj_runs, plot_dir, stem)
 
     print(f"Lab 3 completed: {len(runs)} runs")
     table_dir = experiment.config.output_dir / "tables"

@@ -6,6 +6,7 @@ import math
 from pathlib import Path
 from typing import Any
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 from optimlib.experiment.runner import ExperimentRun
@@ -131,6 +132,16 @@ def _iteration_cell(run: ExperimentRun | None) -> str:
     return f"{run.result.n_iter}{suffix}"
 
 
+def _final_grad_norm(run: ExperimentRun | None) -> float | None:
+    if run is None or run.result is None or not run.result.history:
+        return None
+    grad = run.result.history[-1].grad
+    if grad is None:
+        return None
+    norm = float(np.linalg.norm(grad))
+    return norm if np.isfinite(norm) else None
+
+
 def _plot_group(
     func: MultivariateFunction,
     runs: list[ExperimentRun],
@@ -144,8 +155,8 @@ def _plot_group(
         output_dir,
         basename,
         title=title,
-        run_label=lambda run: f"{run.optimizer_name}: {_compact_params(run.params)}",
-        legend_fontsize=6.6,
+        run_label=lambda run: run.optimizer_name,
+        legend_fontsize=6.4,
     )
     return paths["png"]
 
@@ -165,6 +176,53 @@ def plot_lab3_grouped_trajectories(
         paths["inertial"] = _plot_group(func, inertial, output_dir, f"{stem}_inertial_trajectories", f"{func.name}: inertial trajectories")
     if adaptive:
         paths["adaptive"] = _plot_group(func, adaptive, output_dir, f"{stem}_adaptive_trajectories", f"{func.name}: adaptive trajectories")
+    return paths
+
+
+def _plot_convergence_group(
+    runs: list[ExperimentRun],
+    output_dir: Path,
+    basename: str,
+    title: str,
+) -> Path | None:
+    selected = [run for run in runs if run is not None and run.result is not None and run.result.history]
+    if not selected:
+        return None
+    output_dir.mkdir(parents=True, exist_ok=True)
+    fig, ax = plt.subplots(figsize=(8.0, 5.2))
+    for run in selected:
+        assert run.result is not None
+        iterations = np.array([state.iteration for state in run.result.history], dtype=np.int64)
+        values = np.array([max(float(state.f), 1e-300) for state in run.result.history], dtype=np.float64)
+        ax.semilogy(iterations, values, linewidth=2.0, label=f"{run.optimizer_name}: {_compact_params(run.params)}")
+    ax.set_title(title)
+    ax.set_xlabel("iteration")
+    ax.set_ylabel(r"$f(x_k)$")
+    ax.grid(True, which="both", alpha=0.25)
+    ax.legend(fontsize=6.5, loc="best", framealpha=0.88)
+    plt.tight_layout()
+    path = output_dir / f"{basename}.png"
+    fig.savefig(path, dpi=300)
+    plt.close(fig)
+    return path
+
+
+def plot_lab3_quadratic_convergence(
+    family: list[ExperimentRun],
+    output_dir: Path,
+    stem: str,
+) -> dict[str, Path]:
+    """Plot representative ``f(x_k)`` convergence curves for quadratic functions."""
+    selected = {optimizer: _representative_run(family, optimizer) for optimizer in (*INERTIAL_OPTIMIZERS, *ADAPTIVE_OPTIMIZERS)}
+    paths: dict[str, Path] = {}
+    inertial = [selected[name] for name in INERTIAL_OPTIMIZERS if selected[name] is not None]
+    adaptive = [selected[name] for name in ADAPTIVE_OPTIMIZERS if selected[name] is not None]
+    inertial_path = _plot_convergence_group(inertial, output_dir, f"{stem}_inertial_convergence", "Inertial methods: convergence")
+    adaptive_path = _plot_convergence_group(adaptive, output_dir, f"{stem}_adaptive_convergence", "Adaptive methods: convergence")
+    if inertial_path is not None:
+        paths["inertial"] = inertial_path
+    if adaptive_path is not None:
+        paths["adaptive"] = adaptive_path
     return paths
 
 
@@ -202,6 +260,7 @@ def save_lab3_quadratic_sensitivity_tables(runs: list[ExperimentRun], table_dir:
         r"\small",
         r"\setlength{\tabcolsep}{4pt}",
         r"\textit{Примечание.} Число со звездочкой означает, что метод дошел до лимита итераций без выполнения критерия по норме градиента.",
+        r"\textit{Для AdaGrad и AdaDelta при одинаковом числе итераций сравнение проводится по конечному значению функции и норме градиента.}",
         "",
     ]
     function_titles = {
@@ -238,14 +297,18 @@ def save_lab3_quadratic_sensitivity_tables(runs: list[ExperimentRun], table_dir:
             lines.extend([r"\bottomrule", r"\end{tabular}%", r"}", r"\end{table}", ""])
         for optimizer, param in one_param_specs.items():
             subset = sorted([run for run in family if run.optimizer_name == optimizer], key=lambda run: float(run.params[param]))
-            lines.extend([r"\begin{table}[H]", r"\centering", rf"\caption{{{optimizer}: число итераций}}", r"\begin{tabular}{lrr}", r"\toprule"])
-            lines.append(_latex_escape(param) + r" & Итерации & Сошелся\\")
+            lines.extend([r"\begin{table}[H]", r"\centering", rf"\caption{{{optimizer}: число итераций и качество конечной точки}}", r"\fitreporttable{%", r"\begin{tabular}{lrrrr}", r"\toprule"])
+            lines.append(_latex_escape(param) + r" & Итерации & Сошелся & $f(x_k)$ & $\|\nabla f(x_k)\|$\\")
             lines.append(r"\midrule")
             for run in subset:
                 converged = "true" if run.result is not None and run.result.converged else "false"
                 iterations = "--" if run.result is None else str(run.result.n_iter)
-                lines.append(f"{float(run.params[param]):g} & {iterations} & {converged}\\\\")
-            lines.extend([r"\bottomrule", r"\end{tabular}", r"\end{table}", ""])
+                final_f = None if run.result is None else run.result.f
+                grad_norm = _final_grad_norm(run)
+                lines.append(
+                    f"{float(run.params[param]):g} & {iterations} & {converged} & {_format_float(final_f)} & {_format_float(grad_norm)}\\\\"
+                )
+            lines.extend([r"\bottomrule", r"\end{tabular}%", r"}", r"\end{table}", ""])
     lines.append(r"\endgroup")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path

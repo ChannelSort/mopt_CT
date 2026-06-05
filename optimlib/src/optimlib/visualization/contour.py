@@ -21,6 +21,7 @@ _FIXED_LIMITS: dict[str, tuple[float, float, float, float]] = {
     "Ackley": (-3.0, 3.0, -3.0, 3.0),
     "Himmelblau": (-5.0, 5.0, -5.0, 5.0),
 }
+_ACKLEY_LEVELS = np.array([0.0, 0.5, 1.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0], dtype=np.float64)
 
 
 def _history_points(run: ExperimentRun) -> FloatArray:
@@ -90,21 +91,28 @@ def _draw_shared_contours(
     finite = values[np.isfinite(values)]
     if finite.size == 0:
         finite = np.array([0.0], dtype=np.float64)
+    if func.name == "Ackley":
+        contour = ax.contourf(xx, yy, values, levels=_ACKLEY_LEVELS, cmap="viridis", extend="max")
+        ax.contour(xx, yy, values, levels=_ACKLEY_LEVELS, colors="black", linewidths=0.35, alpha=0.45)
+        fig.colorbar(contour, ax=ax, label="f(x)")
+        return
+
     positive = finite[finite > 0.0]
-    force_log = func.name in {"Ackley", "Himmelblau"}
+    force_log = func.name in {"Himmelblau", "Rosenbrock"}
     use_log = force_log or (positive.size > 0 and float(np.max(positive) / np.min(positive)) > 1e3)
 
     if use_log:
         vmax = max(float(np.max(np.maximum(finite, _CONTOUR_FLOOR))), _CONTOUR_FLOOR * 10.0)
-        levels = np.geomspace(_CONTOUR_FLOOR, vmax, filled_levels)
-        z_plot = np.maximum(values, _CONTOUR_FLOOR)
+        vmin = 1e-4 if func.name == "Rosenbrock" else _CONTOUR_FLOOR
+        levels = np.geomspace(vmin, vmax, filled_levels)
+        z_plot = np.maximum(values, vmin)
         contour = ax.contourf(
             xx,
             yy,
             z_plot,
             levels=levels,
             cmap="viridis",
-            norm=LogNorm(vmin=_CONTOUR_FLOOR, vmax=vmax),
+            norm=LogNorm(vmin=vmin, vmax=vmax),
             extend="max",
         )
         ax.contour(
@@ -113,9 +121,9 @@ def _draw_shared_contours(
             z_plot,
             levels=levels[:: max(1, filled_levels // 14)],
             colors="black",
-            linewidths=0.25,
-            alpha=0.25,
-            norm=LogNorm(vmin=_CONTOUR_FLOOR, vmax=vmax),
+            linewidths=0.35 if func.name == "Rosenbrock" else 0.25,
+            alpha=0.45 if func.name == "Rosenbrock" else 0.25,
+            norm=LogNorm(vmin=vmin, vmax=vmax),
         )
     else:
         contour = ax.contourf(xx, yy, values, levels=filled_levels, cmap="viridis")
@@ -166,9 +174,9 @@ def plot_trajectory_contours(
             points[:, 1],
             color=color,
             linestyle=linestyles[index % len(linestyles)],
-            linewidth=1.8,
+            linewidth=2.2,
             marker="o",
-            markersize=2.8,
+            markersize=3.0,
             markevery=mark_every,
             label=run_label(run) if run_label else f"{run.optimizer_name} {run.params}",
         )

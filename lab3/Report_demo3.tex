@@ -310,24 +310,30 @@ Adam объединяет Momentum и RMSProp:
 \plotplaceholder{WellConditionedQuadratic__x0_-2.0_-2.0__Momentum_heatmap.png}{Momentum: чувствительность к $\alpha$ и $\beta$ на хорошо обусловленной функции}
 \plotplaceholder{WellConditionedQuadratic__x0_-2.0_-2.0__Nesterov_heatmap.png}{Nesterov: чувствительность к $\alpha$ и $\beta$ на хорошо обусловленной функции}
 \plotplaceholder{WellConditionedQuadratic__x0_-2.0_-2.0__AdaGrad_sensitivity.png}{AdaGrad: чувствительность к $\alpha$ на хорошо обусловленной функции}
+\plotplaceholder{WellConditionedQuadratic__x0_-2.0_-2.0__AdaGrad_final_f.png}{AdaGrad: конечное значение $f(x_k)$ при разных $\alpha$ на хорошо обусловленной функции}
 \plotplaceholder{WellConditionedQuadratic__x0_-2.0_-2.0__RMSProp_heatmap.png}{RMSProp: чувствительность к $\alpha$ и $\rho$ на хорошо обусловленной функции}
 \plotplaceholder{WellConditionedQuadratic__x0_-2.0_-2.0__AdaDelta_sensitivity.png}{AdaDelta: чувствительность к $\rho$ на хорошо обусловленной функции}
+\plotplaceholder{WellConditionedQuadratic__x0_-2.0_-2.0__AdaDelta_final_f.png}{AdaDelta: конечное значение $f(x_k)$ при разных $\rho$ на хорошо обусловленной функции}
 \plotplaceholder{WellConditionedQuadratic__x0_-2.0_-2.0__Adam_heatmap.png}{Adam: чувствительность к $\beta_1$ и $\beta_2$ на хорошо обусловленной функции}
 
-\textit{Комментарий к графикам.} На хорошо обусловленной функции удачная область параметров шире: кривизна по координатам одинакова. Поэтому главный вклад дают длина шага и инерция.
+\textit{Комментарий к графикам.} На хорошо обусловленной функции удачная область параметров шире: кривизна по координатам одинакова. Пунктирная линия $1500$ на графиках итераций означает достижение лимита \texttt{max\_iter}, а не успешную сходимость. Для AdaGrad и AdaDelta число итераций часто не различает параметры, поэтому дополнительно показано конечное значение $f(x_k)$.
 
 \subsubsection{Плохо обусловленная квадратичная функция}
 
 \plotplaceholder{IllConditionedQuadratic__x0_-2.0_-2.0__Momentum_heatmap.png}{Momentum: чувствительность к $\alpha$ и $\beta$ на плохо обусловленной функции}
 \plotplaceholder{IllConditionedQuadratic__x0_-2.0_-2.0__Nesterov_heatmap.png}{Nesterov: чувствительность к $\alpha$ и $\beta$ на плохо обусловленной функции}
 \plotplaceholder{IllConditionedQuadratic__x0_-2.0_-2.0__AdaGrad_sensitivity.png}{AdaGrad: чувствительность к $\alpha$ на плохо обусловленной функции}
+\plotplaceholder{IllConditionedQuadratic__x0_-2.0_-2.0__AdaGrad_final_f.png}{AdaGrad: конечное значение $f(x_k)$ при разных $\alpha$ на плохо обусловленной функции}
 \plotplaceholder{IllConditionedQuadratic__x0_-2.0_-2.0__RMSProp_heatmap.png}{RMSProp: чувствительность к $\alpha$ и $\rho$ на плохо обусловленной функции}
 \plotplaceholder{IllConditionedQuadratic__x0_-2.0_-2.0__AdaDelta_sensitivity.png}{AdaDelta: чувствительность к $\rho$ на плохо обусловленной функции}
+\plotplaceholder{IllConditionedQuadratic__x0_-2.0_-2.0__AdaDelta_final_f.png}{AdaDelta: конечное значение $f(x_k)$ при разных $\rho$ на плохо обусловленной функции}
 \plotplaceholder{IllConditionedQuadratic__x0_-2.0_-2.0__Adam_heatmap.png}{Adam: чувствительность к $\beta_1$ и $\beta_2$ на плохо обусловленной функции}
 
-\textit{Комментарий к графикам.} На плохо обусловленной функции удачная область параметров уже: слишком большой шаг или слишком сильная инерция быстро приводят к колебаниям поперек узкой долины. Адаптивные методы выигрывают за счет уменьшения шага по координате с большими недавними градиентами.
+\textit{Комментарий к графикам.} На плохо обусловленной функции удачная область параметров уже: слишком большой шаг или слишком сильная инерция быстро приводят к колебаниям поперек узкой долины. Плоская линия на уровне $1500$ означает, что запуски дошли до лимита итераций. В этом случае AdaGrad и AdaDelta сравниваются по $f(x_k)$ и норме градиента, а не только по числу итераций.
 
 \tableplaceholder{../outputs/lab3/tables/quadratic_sensitivity_tables.tex}
+
+\textit{Комментарий к таблицам.} Для AdaGrad и AdaDelta в таблицах дополнительно приведены $f(x_k)$ и $\|\nabla f(x_k)\|$. Если все строки имеют $1500$ итераций и \texttt{false}, это означает, что метод не выполнил критерий сходимости за отведенный лимит, но качество конечной точки все равно можно сравнить по этим двум величинам.
 
 \subsection{Траектории на квадратичных функциях}
 
@@ -335,10 +341,14 @@ Adam объединяет Momentum и RMSProp:
 
 \plotplaceholder{WellConditionedQuadratic__x0_-2.0_-2.0__inertial_trajectories.png}{Инерционные методы на хорошо обусловленной квадратичной функции}
 \plotplaceholder{WellConditionedQuadratic__x0_-2.0_-2.0__adaptive_trajectories.png}{Адаптивные методы на хорошо обусловленной квадратичной функции}
+\plotplaceholder{WellConditionedQuadratic__x0_-2.0_-2.0__inertial_convergence.png}{Инерционные методы: сходимость $f(x_k)$ на хорошо обусловленной функции}
+\plotplaceholder{WellConditionedQuadratic__x0_-2.0_-2.0__adaptive_convergence.png}{Адаптивные методы: сходимость $f(x_k)$ на хорошо обусловленной функции}
 \plotplaceholder{IllConditionedQuadratic__x0_-2.0_-2.0__inertial_trajectories.png}{Инерционные методы на плохо обусловленной квадратичной функции}
 \plotplaceholder{IllConditionedQuadratic__x0_-2.0_-2.0__adaptive_trajectories.png}{Адаптивные методы на плохо обусловленной квадратичной функции}
+\plotplaceholder{IllConditionedQuadratic__x0_-2.0_-2.0__inertial_convergence.png}{Инерционные методы: сходимость $f(x_k)$ на плохо обусловленной функции}
+\plotplaceholder{IllConditionedQuadratic__x0_-2.0_-2.0__adaptive_convergence.png}{Адаптивные методы: сходимость $f(x_k)$ на плохо обусловленной функции}
 
-\textit{Комментарий к графикам.} На графиках крестом отмечена стартовая точка, звездой --- глобальный минимум, квадратом --- конечная точка траектории. Разделение на две группы показывает, что Momentum и Nesterov меняют форму пути через накопленную скорость, а AdaGrad, RMSProp, AdaDelta и Adam --- через координатный масштаб обновления.
+\textit{Комментарий к графикам.} На графиках крестом отмечена стартовая точка, звездой --- глобальный минимум, квадратом --- конечная точка траектории. Разделение на две группы показывает, что Momentum и Nesterov меняют форму пути через накопленную скорость, а AdaGrad, RMSProp, AdaDelta и Adam --- через координатный масштаб обновления. На хорошо обусловленной функции траектории часто почти совпадают, поэтому дополнительно приведены графики $f(x_k)$ в логарифмической шкале.
 
 \subsection{Сложные функции: таблицы запусков}
 
@@ -379,7 +389,7 @@ Adam объединяет Momentum и RMSProp:
 \plotplaceholder{Ackley__x0_2.0_-2.0__inertial_trajectories.png}{Ackley, $x_0=(2.0,-2.0)$: инерционные методы}
 \plotplaceholder{Ackley__x0_2.0_-2.0__adaptive_trajectories.png}{Ackley, $x_0=(2.0,-2.0)$: адаптивные методы}
 
-\textit{Комментарий к графикам.} Функция Экли имеет глобальный минимум в $(0,0)$, но ее поверхность содержит локальные колебания. Если конечная точка отмечена не около звезды минимума, это означает, что метод остановился или застрял в другой области; поэтому для Ackley особенно важно смотреть не только на \texttt{converged}, но и на $f(x_k)$ и положение конечной точки.
+\textit{Комментарий к графикам.} Функция Экли имеет глобальный минимум в $(0,0)$, но ее поверхность содержит локальные колебания. На графиках использовано общее окно $[-3,3]\times[-3,3]$ и фиксированные уровни, чтобы были видны кольца рельефа. Значение \texttt{converged = true} означает только выполнение критерия по норме градиента, а не попадание в глобальный минимум. Симметричные старты $[-2,-2]$ и $[2,-2]$ могут давать одинаковые или близкие результаты из-за симметрии Ackley.
 
 \subsubsection{Himmelblau}
 \plotplaceholder{Himmelblau__x0_2.0_2.0__inertial_trajectories.png}{Himmelblau, $x_0=(2.0,2.0)$: инерционные методы}
