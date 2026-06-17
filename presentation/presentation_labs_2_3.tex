@@ -1,0 +1,314 @@
+﻿\documentclass[10pt,aspectratio=169]{beamer}
+
+\usepackage{cmap}
+\usepackage[T2A]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[russian]{babel}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{array}
+
+\usetheme{Madrid}
+\usecolortheme{seahorse}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{caption}[numbered]
+\hypersetup{unicode=true,colorlinks=true,linkcolor=blue,urlcolor=blue}
+
+\graphicspath{{../outputs/lab2/plots/}{../outputs/lab3/plots/}}
+
+\newcommand{\grad}{\nabla}
+\newcommand{\norm}[1]{\left\lVert #1 \right\rVert}
+\newcommand{\eps}{\varepsilon}
+\newcommand{\smallnote}[1]{\vspace{0.4em}{\footnotesize\color{gray!75!black}#1}}
+
+\title[ЛР2 и ЛР3]{Методы оптимизации: лабораторные работы 2 и 3}
+\subtitle{Классический градиентный спуск, линейный поиск и модификации градиентного спуска}
+\author{Проект \texttt{mopt\_CT}}
+\date{2026}
+
+\begin{document}
+
+\begin{frame}
+    \titlepage
+\end{frame}
+
+\begin{frame}{Материалы и фокус презентации}
+\begin{columns}[T,onlytextwidth]
+\column{0.52\textwidth}
+\textbf{Использованные материалы лекций:}
+\begin{itemize}
+    \item постановка задачи минимизации и критерии остановки;
+    \item классический градиентный спуск;
+    \item одномерный поиск, условия Армихо и Вольфе;
+    \item оценки сходимости градиентных методов;
+    \item Momentum, Nesterov, AdaGrad, RMSProp, AdaDelta, Adam.
+\end{itemize}
+\column{0.44\textwidth}
+\textbf{Что сравниваем:}
+\begin{itemize}
+    \item ЛР2: как выбирать длину шага $\alpha_k$;
+    \item ЛР3: как менять направление и масштаб шага;
+    \item цена метода: итерации, вызовы $f$, вызовы $\grad f$;
+    \item поведение на квадратичных и многоэкстремальных функциях.
+\end{itemize}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Общая постановка}
+Ищется минимум гладкой функции:
+\[
+    \min_{x\in\mathbb{R}^n} f(x), \qquad \norm{\grad f(x_k)} \le \eps.
+\]
+
+\begin{block}{Базовая схема спуска}
+\[
+    x_{k+1}=x_k+\alpha_k p_k,
+    \qquad p_k \approx -\grad f(x_k).
+\]
+\end{block}
+
+\begin{itemize}
+    \item В ЛР2 направление фиксировано как антиградиент, исследуется выбор $\alpha_k$.
+    \item В ЛР3 направление и масштаб шага меняются за счёт памяти метода.
+    \item Во всех экспериментах ЛР3 использовалась точность $\eps=10^{-8}$.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Тестовые функции}
+\begin{columns}[T,onlytextwidth]
+\column{0.5\textwidth}
+\textbf{Квадратичные функции}
+\[
+    f(x)=\frac12 x^T A x,
+    \qquad \grad f(x)=Ax.
+\]
+\begin{itemize}
+    \item Хорошо обусловленная: близкая кривизна по координатам.
+    \item Плохо обусловленная: узкая вытянутая долина.
+\end{itemize}
+
+\column{0.48\textwidth}
+\textbf{Сложные функции}
+\begin{itemize}
+    \item Rosenbrock: узкая изогнутая долина, минимум $(1,1)$.
+    \item Ackley: локальные колебания, глобальный минимум $(0,0)$.
+    \item Himmelblau: четыре глобальных минимума и области притяжения.
+\end{itemize}
+\end{columns}
+
+\smallnote{Квадратичные функции показывают влияние обусловленности, сложные функции проверяют устойчивость траекторий и критериев остановки.}
+\end{frame}
+
+\begin{frame}{ЛР2: классические методы выбора шага}
+\begin{columns}[T,onlytextwidth]
+\column{0.48\textwidth}
+\textbf{Методы}
+\begin{itemize}
+    \item ConstantStepGD: $\alpha_k=\alpha$.
+    \item ArmijoBacktracking: дробление шага до достаточного убывания.
+    \item StrongWolfe: достаточное убывание и контроль кривизны.
+    \item SteepestDescent: одномерная минимизация вдоль антиградиента.
+\end{itemize}
+
+\column{0.5\textwidth}
+\textbf{Условие Армихо}
+\[
+ f(x_k+\alpha p_k) \le f(x_k)+c_1\alpha\grad f(x_k)^Tp_k.
+\]
+\textbf{Сильное условие Вольфе}
+\[
+ |\grad f(x_k+\alpha p_k)^Tp_k| \le c_2 |\grad f(x_k)^Tp_k|.
+\]
+\end{columns}
+\end{frame}
+
+\begin{frame}{ЛР2: постоянный шаг}
+\begin{columns}[T,onlytextwidth]
+\column{0.52\textwidth}
+\includegraphics[width=\linewidth]{lab2_constant_step_iterations_vs_alpha.png}
+\column{0.44\textwidth}
+\begin{itemize}
+    \item Слишком маленький $\alpha$ даёт устойчивый, но медленный спуск.
+    \item Слишком большой $\alpha$ приводит к колебаниям или расходимости.
+    \item На плохо обусловленной функции допустимая область шагов уже.
+\end{itemize}
+\smallnote{Это соответствует лекционной картине: скорость градиентного спуска на квадратичных функциях зависит от спектра матрицы Гессе.}
+\end{columns}
+\end{frame}
+
+\begin{frame}{ЛР2: цена линейного поиска}
+\begin{columns}[T,onlytextwidth]
+\column{0.49\textwidth}
+\includegraphics[width=\linewidth]{lab2_line_search_vs_tolerance_n_iter.png}
+\column{0.49\textwidth}
+\includegraphics[width=\linewidth]{lab2_line_search_vs_tolerance_n_calls.png}
+\end{columns}
+
+\begin{itemize}
+    \item Линейный поиск уменьшает риск неудачного шага.
+    \item Но Armijo и Wolfe платят дополнительными вычислениями функции и градиента.
+    \item Поэтому сравнивать нужно не только число итераций, но и стоимость итерации.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{ЛР2: траектории на сложной функции Ackley}
+\begin{columns}[T,onlytextwidth]
+\column{0.55\textwidth}
+\includegraphics[width=\linewidth]{ackley_trajectories.png}
+\column{0.42\textwidth}
+\begin{itemize}
+    \item Глобальный минимум Ackley находится в $(0,0)$.
+    \item Поверхность содержит локальные колебания, поэтому форма траектории важна.
+    \item Для линейного поиска важно учитывать число вызовов $f$ и $\grad f$.
+\end{itemize}
+\smallnote{В ЛР2 сравниваются классические правила выбора длины шага при общем направлении антиградиента.}
+\end{columns}
+\end{frame}
+
+\begin{frame}{ЛР3: идея модификаций градиентного спуска}
+\begin{block}{Общая форма}
+\[
+    x_{k+1}=x_k-\alpha_k d_k,
+\]
+где $d_k$ строится не только по текущему градиенту, но и по внутреннему состоянию метода.
+\end{block}
+
+\begin{columns}[T,onlytextwidth]
+\column{0.48\textwidth}
+\textbf{Инерционные методы}
+\begin{itemize}
+    \item Momentum;
+    \item Nesterov.
+\end{itemize}
+\column{0.48\textwidth}
+\textbf{Адаптивные методы}
+\begin{itemize}
+    \item AdaGrad;
+    \item RMSProp;
+    \item AdaDelta;
+    \item Adam.
+\end{itemize}
+\end{columns}
+
+\smallnote{Из лекций: модификации можно понимать как фильтрацию направления и координатное масштабирование шага.}
+\end{frame}
+
+\begin{frame}{ЛР3: основные формулы методов}
+\begin{columns}[T,onlytextwidth]
+\column{0.49\textwidth}
+\textbf{Momentum}
+\[
+    v_{k+1}=\beta v_k+\grad f(x_k),\qquad x_{k+1}=x_k-\alpha v_{k+1}.
+\]
+\textbf{AdaGrad}
+\[
+    s_{k+1}=s_k+g_k^2,\qquad x_{k+1}=x_k-\alpha\frac{g_k}{\sqrt{s_{k+1}}+\delta}.
+\]
+\column{0.49\textwidth}
+\textbf{RMSProp}
+\[
+    s_{k+1}=\rho s_k+(1-\rho)g_k^2.
+\]
+\textbf{Adam}
+\[
+    m_{k+1}=\beta_1m_k+(1-\beta_1)g_k,
+\]
+\[
+    v_{k+1}=\beta_2v_k+(1-\beta_2)g_k^2.
+\]
+\end{columns}
+\smallnote{Все операции с квадратами и делением в адаптивных методах выполняются покоординатно.}
+\end{frame}
+
+\begin{frame}{ЛР3: чувствительность к параметрам}
+\begin{columns}[T,onlytextwidth]
+\column{0.49\textwidth}
+\includegraphics[width=\linewidth]{WellConditionedQuadratic__x0_-2.0_-2.0__Momentum_heatmap.png}
+\column{0.49\textwidth}
+\includegraphics[width=\linewidth]{WellConditionedQuadratic__x0_-2.0_-2.0__AdaGrad_final_f.png}
+\end{columns}
+
+\begin{itemize}
+    \item Momentum чувствителен к паре $\alpha\times\beta$.
+    \item Для AdaGrad число итераций часто упирается в \texttt{max\_iter}, поэтому информативнее смотреть $f(x_k)$ и $\norm{\grad f(x_k)}$.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{ЛР3: сходимость на квадратичных функциях}
+\begin{columns}[T,onlytextwidth]
+\column{0.49\textwidth}
+\includegraphics[width=\linewidth]{WellConditionedQuadratic__x0_-2.0_-2.0__inertial_convergence.png}
+\column{0.49\textwidth}
+\includegraphics[width=\linewidth]{IllConditionedQuadratic__x0_-2.0_-2.0__adaptive_convergence.png}
+\end{columns}
+
+\begin{itemize}
+    \item На хорошо обусловленной функции многие траектории похожи, поэтому важен график $f(x_k)$.
+    \item На плохо обусловленной функции адаптивное масштабирование помогает сгладить различие кривизн.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{ЛР3: Ackley и критерий остановки}
+\begin{columns}[T,onlytextwidth]
+\column{0.55\textwidth}
+\includegraphics[width=\linewidth]{Ackley__x0_-2.0_-2.0__adaptive_trajectories.png}
+\column{0.42\textwidth}
+\begin{itemize}
+    \item На Ackley локальные колебания могут останавливать метод вне глобального минимума.
+    \item \texttt{converged = true} означает выполнение $\norm{\grad f(x_k)}\le 10^{-8}$.
+    \item Это не всегда означает попадание в глобальный минимум $(0,0)$.
+\end{itemize}
+\smallnote{Поэтому для многоэкстремальных функций в отчёте сравниваются также $f(x_k)$ и конечная точка.}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Сравнение ЛР2 и ЛР3}
+\begin{columns}[T,onlytextwidth]
+\column{0.48\textwidth}
+\textbf{ЛР2: линейный поиск}
+\begin{itemize}
+    \item меняется длина шага $\alpha_k$;
+    \item направление остаётся антиградиентным;
+    \item сильная сторона: контролируемое убывание функции;
+    \item цена: дополнительные вызовы $f$ и $\grad f$.
+\end{itemize}
+
+\column{0.48\textwidth}
+\textbf{ЛР3: модификации спуска}
+\begin{itemize}
+    \item меняются направление и масштаб шага;
+    \item используется внутреннее состояние метода;
+    \item сильная сторона: ускорение и адаптация;
+    \item риск: чувствительность к гиперпараметрам.
+\end{itemize}
+\end{columns}
+
+\vspace{0.6em}
+\begin{block}{Главная практическая идея}
+Линейный поиск делает шаг безопаснее, а модификации градиентного спуска делают направление и масштаб шага информативнее.
+\end{block}
+\end{frame}
+
+\begin{frame}{Выводы}
+\begin{itemize}
+    \item Постоянный шаг требует аккуратного выбора: слишком малый шаг медленный, слишком большой может разрушить сходимость.
+    \item Armijo, Strong Wolfe и наискорейший спуск уменьшают риск неудачного шага, но увеличивают стоимость итерации.
+    \item Momentum и Nesterov ускоряют движение за счёт памяти первого порядка.
+    \item RMSProp и Adam оказались более устойчивыми среди адаптивных методов на выбранных сетках параметров.
+    \item AdaGrad и AdaDelta нужно оценивать по конечному $f(x_k)$ и $\norm{\grad f(x_k)}$, если все запуски достигли \texttt{max\_iter}.
+    \item На Ackley и Himmelblau критерий по градиенту нужно интерпретировать осторожно: стационарная точка не всегда равна нужному глобальному минимуму.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Файлы проекта}
+\begin{itemize}
+    \item Отчёт ЛР2: \texttt{lab2/Report\_demo2.tex}, графики: \texttt{outputs/lab2/}.
+    \item Отчёт ЛР3: \texttt{lab3/Report\_demo3.tex}, графики: \texttt{outputs/lab3/}.
+    \item Общие функции и визуализация: \texttt{optimlib/src/optimlib/}.
+    \item Полные CSV-сводки: \texttt{outputs/lab2/summary.csv}, \texttt{outputs/lab3/summary.csv}.
+\end{itemize}
+
+\end{frame}
+
+\end{document}

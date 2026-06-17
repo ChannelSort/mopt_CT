@@ -82,7 +82,7 @@ functions:
   - name: Lab4Rosenbrock
     params: {x0: [2.0, 2.0]}
   - name: Lab4Himmelblau
-    params: {x0: [2.0, 2.0]}
+    params: {x0: [3.35, 0.08]}
   - name: Lab4Himmelblau
     params: {x0: [-2.0, 3.0]}
   - name: Lab4Himmelblau
@@ -92,7 +92,7 @@ functions:
   - name: Lab4Ackley
     params: {x0: [2.5, -2.0]}
   - name: Lab4Ackley
-    params: {x0: [0.1, 0.1]}
+    params: {x0: [0.7, 0.65]}
 
 optimizers:
   - name: QuadraticConjugateGradient

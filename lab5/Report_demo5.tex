@@ -1,5 +1,6 @@
 \documentclass[14pt,a4paper]{extarticle}
 
+\usepackage{cmap}
 \usepackage[T2A]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage[russian]{babel}
@@ -7,6 +8,7 @@
 \usepackage{amsmath,amssymb}
 \usepackage{graphicx}
 \usepackage{booktabs}
+\usepackage{longtable}
 \usepackage{float}
 \usepackage{array}
 \usepackage{caption}
@@ -27,16 +29,51 @@
     \begin{figure}[H]
         \centering
         \IfFileExists{../outputs/lab5/plots/#1}{
-            \includegraphics[width=0.88\textwidth]{#1}
+            \includegraphics[width=0.98\textwidth]{#1}
         }{
-            \fbox{\parbox[c][5cm][c]{0.82\textwidth}{\centering Файл \texttt{\detokenize{#1}} создается запуском\\\texttt{python lab5/run.py}}}
+            \fbox{\parbox[c][5cm][c]{0.9\textwidth}{\centering Файл \texttt{\detokenize{#1}} создается запуском\\\texttt{python lab5/run.py}}}
         }
         \caption{#2}
     \end{figure}
 }
 
+\newcommand{\twoplotplaceholder}[3]{
+    \begin{figure}[H]
+        \centering
+        \begin{minipage}{0.49\textwidth}
+            \centering
+            \IfFileExists{../outputs/lab5/plots/#1}{
+                \includegraphics[width=\linewidth]{#1}
+            }{
+                \fbox{\parbox[c][4cm][c]{0.9\linewidth}{\centering Файл \texttt{\detokenize{#1}} создается запуском\\\texttt{python lab5/run.py}}}
+            }
+        \end{minipage}\hfill
+        \begin{minipage}{0.49\textwidth}
+            \centering
+            \IfFileExists{../outputs/lab5/plots/#2}{
+                \includegraphics[width=\linewidth]{#2}
+            }{
+                \fbox{\parbox[c][4cm][c]{0.9\linewidth}{\centering Файл \texttt{\detokenize{#2}} создается запуском\\\texttt{python lab5/run.py}}}
+            }
+        \end{minipage}
+        \caption{#3}
+    \end{figure}
+}
+
 \newcommand{\fitreporttable}[1]{
-    \resizebox{\textwidth}{!}{#1}
+    \par\noindent\resizebox{\linewidth}{!}{#1}\par
+}
+
+\newcommand{\tableplaceholder}[1]{
+    \IfFileExists{#1}{
+        \input{#1}
+    }{
+        \begin{table}[H]
+            \centering
+            \caption{Файл с таблицей пока не сгенерирован}
+            \fbox{\parbox[c][3cm][c]{0.88\textwidth}{\centering Запустите \texttt{python lab5/run.py}, чтобы создать\\\texttt{\detokenize{#1}}}}
+        \end{table}
+    }
 }
 
 \title{Лабораторная работа №5\\Оптимизация в задаче регрессии}
@@ -48,6 +85,7 @@
 
 \begin{document}
 
+\hypersetup{pageanchor=false}
 \begin{titlepage}
     \begin{center}
         {\large Отчет по лабораторной работе №5}\\[0.5cm]
@@ -64,6 +102,7 @@
         2026
     \end{center}
 \end{titlepage}
+\hypersetup{pageanchor=true}
 
 \tableofcontents
 \newpage
@@ -92,6 +131,8 @@
 
 \section{Данные и модели}
 
+Для каждого набора данных было сгенерировано $m=120$ точек с гауссовским шумом. В первом случае использовался диапазон $x\in[-3,3]$, во втором --- $x\in[-2.5,2.5]$. Эти параметры вместе с seed сохраняются в конфигурации и в таблице \texttt{datasets.csv}, поэтому эксперимент воспроизводим.
+
 Первый набор данных почти линейный:
 \[
     y=1.6x-0.7+0.1\sin(3x)+\varepsilon,\qquad \operatorname{Var}(\varepsilon)=0.04.
@@ -118,7 +159,7 @@
 \[
     w_{t+1}=w_t-\alpha_t\nabla L_{B_t}(w_t).
 \]
-В экспериментах использовалось убывание шага по правилу $\alpha_t=\alpha_0/\sqrt{t+1}$.
+В экспериментах использовалось убывание шага по правилу $\alpha_t=\alpha_0/\sqrt{t+1}$, где $\alpha_0=0.03$. Максимальное число эпох равно $80$, базовый mini-batch имеет размер $16$, а в отдельном исследовании сравнивались размеры $1,4,8,16,32,64$ и $m=120$. В историях сохранялись полная функция потерь, эмпирический риск, L1/L2-слагаемые, размер batch, текущий шаг и счетчики вызовов.
 
 \textbf{Промежуточный вывод.} Малый batch дает шумный, но частый сигнал о направлении. Большой batch ближе к полному градиенту, зато одно обновление становится менее локальным по данным. Поэтому сравнение batch size лучше смотреть не только по эпохам, но и по числу градиентных вычислений.
 
@@ -141,23 +182,23 @@
 
 \begin{table}[H]
 \centering
-\caption{Сводка по основным оптимизаторам}
+\caption{Сводка по основным оптимизаторам без регуляризации}
 \fitreporttable{
 \begin{tabular}{lrrrrr}
 \toprule
 Метод & Успешных запусков & Лучшее $f$ & Средн. итераций & $N_f$ & $N_g$\\
 \midrule
 AnalyticalLinearRegression1D & 2 & 0.0394 & 1.00 & 1.00 & 1.00\\
-GaussNewton & 18 & 0.0385 & 23.00 & 24.00 & 24.00\\
-LevenbergMarquardt & 22 & 0.0385 & 13.91 & 14.91 & 11.05\\
-MiniBatchGradientDescent & 0 & 0.0618 & 80.00 & 81.00 & 1063.07\\
+GaussNewton & 10 & 0.0385 & 1.00 & 2.00 & 2.00\\
+LevenbergMarquardt & 10 & 0.0385 & 3.20 & 4.20 & 4.20\\
+MiniBatchGradientDescent & 0 & 0.0618 & 80.00 & 81.00 & 1304.53\\
 StochasticGradientDescent & 0 & 0.0394 & 80.00 & 81.00 & 9681.00\\
 \bottomrule
 \end{tabular}
 }
 \end{table}
 
-\textbf{Промежуточный вывод.} Методы Гаусса--Ньютона и Левенберга--Марквардта быстрее приходят к малой ошибке, потому что используют якобиан всей модели. SGD и mini-batch не достигали строгой точности за 80 эпох, но на части задач давали близкие значения функции потерь.
+\textbf{Промежуточный вывод.} В колонке успешных запусков считается только выполнение строгого критерия остановки, а не просто получение хорошей аппроксимации. Поэтому SGD и mini-batch имеют ноль успешных запусков при лимите $80$ эпох, хотя на части задач дают близкие значения функции потерь. Методы Гаусса--Ньютона и Левенберга--Марквардта быстрее приходят к малой ошибке, потому что используют якобиан всей модели.
 
 \subsection{Влияние степени полинома}
 
@@ -197,7 +238,9 @@ L2, $\lambda=0.001$ & 0.29969 & 4\\
 L2, $\lambda=0.01$ & 0.39649 & 4\\
 L2, $\lambda=0.1$ & 0.57235 & 3\\
 L2, $\lambda=1$ & 0.69107 & 3\\
+Elastic Net, $\lambda=0.001$ & 0.30646 & 4\\
 Elastic Net, $\lambda=0.01$ & 0.44208 & 4\\
+Elastic Net, $\lambda=0.1$ & 0.65768 & 47\\
 Elastic Net, $\lambda=1$ & 0.93095 & 85\\
 \bottomrule
 \end{tabular}
@@ -214,32 +257,32 @@ Elastic Net, $\lambda=1$ & 0.93095 & 85\\
 \plotplaceholder{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_5_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_fit.png}{Аппроксимация нелинейных данных полиномом степени 5}
 \textit{Комментарий к графику.} Нелинейный набор содержит пик и осцилляцию. Полином высокой степени лучше повторяет форму данных, но именно здесь возрастает риск лишней гибкости и становится полезной регуляризация.
 
-\plotplaceholder{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_5_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_history_loss.png}{История loss для nonlinear degree 5}
-\textit{Комментарий к графику.} Методы на всей выборке обычно дают более гладкую кривую loss, потому что используют полный градиент или якобиан. Стохастические методы движутся шумнее: каждый шаг видит только часть данных.
+\twoplotplaceholder{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_5_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_history_loss.png}{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_5_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_history_loss_by_grad_calls.png}{История loss для nonlinear degree 5 по итерациям и по числу вычислений градиента}
+\textit{Комментарий к графикам.} Методы на всей выборке обычно дают более гладкую кривую loss, потому что используют полный градиент или якобиан. Ось по числу градиентных вычислений честнее показывает цену стохастических методов: SGD делает много дешевых обновлений, но путь к малой ошибке может быть дорогим.
 
-\plotplaceholder{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_5_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_history_loss_by_grad_calls.png}{Loss в зависимости от числа вычислений градиента}
-\textit{Комментарий к графику.} Такая ось честнее показывает цену стохастических методов. SGD делает много дешевых обновлений, но по счетчику градиентов видно, что путь к малой ошибке может быть дорогим.
+\twoplotplaceholder{lab5_batch_size_comparison_by_epoch.png}{lab5_batch_size_comparison_by_grad_calls.png}{Влияние размера batch по эпохам и по числу вычислений градиента}
+\textit{Комментарий к графикам.} Малые батчи обновляют веса чаще и шумнее, крупные батчи ближе к полному градиенту. Сравнение по двум осям разделяет устойчивость траектории и фактическую вычислительную цену.
 
-\plotplaceholder{lab5_batch_size_comparison_by_epoch.png}{Влияние размера batch по эпохам}
-\textit{Комментарий к графику.} Малые батчи обновляют веса чаще и шумнее, крупные батчи ближе к полному градиенту. Поэтому график по эпохам показывает не только качество направления, но и то, сколько обновлений было сделано внутри эпохи.
+\twoplotplaceholder{lab5_regularization_loss.png}{lab5_regularization_empirical_risk.png}{Полная функция потерь и эмпирический риск при разных регуляризациях}
+\textit{Комментарий к графикам.} При росте регуляризации модель жертвует точностью на обучающей выборке ради более сдержанных коэффициентов. Полная функция потерь может расти из-за штрафа, даже если эмпирический риск меняется умеренно.
 
-\plotplaceholder{lab5_regularization_empirical_risk.png}{Эмпирический риск при разных регуляризациях}
-\textit{Комментарий к графику.} При росте регуляризации модель жертвует точностью на обучающей выборке ради более сдержанных коэффициентов. Если риск растет слишком сильно, штраф уже подавляет полезную гибкость модели.
+\twoplotplaceholder{lab5_regularization_l1_term.png}{lab5_regularization_l2_term.png}{L1- и L2-слагаемые при разных регуляризациях}
+\textit{Комментарий к графикам.} Эти графики показывают, какая часть оптимизируемой функции связана именно со штрафом. При сильных коэффициентах регуляризации штраф начинает доминировать и подавляет гибкость модели.
+
+\plotplaceholder{lab5_regularization_fit.png}{Аппроксимация nonlinear degree 5 до и после регуляризации}
+\textit{Комментарий к графику.} Нерегуляризованная кривая сильнее подстраивается под обучающие точки, а регуляризованные варианты становятся более сглаженными. На этом графике виден практический смысл штрафа: он меняет форму модели, а не только значение целевой функции.
 
 \plotplaceholder{lab5_regularized_coefficients.png}{Коэффициенты при регуляризации}
 \textit{Комментарий к графику.} L1 стремится занулять менее важные коэффициенты, L2 уменьшает их более плавно, а Elastic Net сочетает оба эффекта. По столбцам коэффициентов видно, как штраф меняет саму модель, а не только итоговый loss.
 
-\plotplaceholder{lab5_method_comparison_loss.png}{Сравнение методов по итоговой функции потерь}
-\textit{Комментарий к графику.} Методы Гаусса--Ньютона и Левенберга--Марквардта выигрывают там, где структура суммы квадратов хорошо описывает задачу. Градиентные методы проще, но им нужны дополнительные эпохи и аккуратный шаг.
-
-\plotplaceholder{lab5_method_comparison_elapsed_seconds.png}{Сравнение методов по среднему времени работы}
-\textit{Комментарий к графику.} Время работы дополняет счетчики итераций и градиентов: аналитическое решение почти мгновенно, методы Гаусса--Ньютона тратят больше линейной алгебры на шаг, а стохастические методы делают много дешевых обновлений. Поэтому метод с малым числом эпох не обязательно оказывается самым дешевым по фактическому времени.
+\twoplotplaceholder{lab5_method_comparison_loss.png}{lab5_method_comparison_elapsed_seconds.png}{Сравнение методов по итоговой функции потерь и среднему времени работы}
+\textit{Комментарий к графикам.} Методы Гаусса--Ньютона и Левенберга--Марквардта выигрывают там, где структура суммы квадратов хорошо описывает задачу. Время работы дополняет счетчики итераций и градиентов: метод с малым числом эпох не обязательно оказывается самым дешевым по фактическому времени.
 
 \section{Полная таблица экспериментов}
 
-Полная сводка 264 запусков хранится в \path{../outputs/lab5/tables/summary.csv}. Ниже приведена печатная версия таблицы, разбитая на масштабируемые блоки. Дополнительные CSV с историями, коэффициентами и данными сохранены в той же папке.
+Полная сводка 264 запусков хранится в \path{../outputs/lab5/tables/summary.csv}. Ниже приведена печатная версия таблицы, разбитая на масштабируемые блоки. Дополнительные CSV с историями, коэффициентами и данными сохранены в той же папке. Строки со статусом \texttt{skipped\_batch\_study} являются техническим фильтром для отдельного исследования batch size: они не означают неудачное обучение, а показывают, что соответствующая комбинация не входила в этот подэксперимент.
 
-\input{../outputs/lab5/tables/summary_report_scaled.tex}
+\tableplaceholder{../outputs/lab5/tables/summary_report_scaled.tex}
 
 \section{Общий вывод}
 

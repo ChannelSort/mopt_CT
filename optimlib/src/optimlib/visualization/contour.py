@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -18,7 +18,6 @@ from optimlib.utils.numerics import max_abs
 _MAX_PLOT_COORDINATE = 1e6
 _CONTOUR_FLOOR = 1e-8
 _FIXED_LIMITS: dict[str, tuple[float, float, float, float]] = {
-    "Ackley": (-3.0, 3.0, -3.0, 3.0),
     "Himmelblau": (-5.0, 5.0, -5.0, 5.0),
 }
 _ACKLEY_LEVELS = np.array([0.0, 0.5, 1.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0], dtype=np.float64)
@@ -35,11 +34,26 @@ def _history_points(run: ExperimentRun) -> FloatArray:
     return np.vstack(points)[:, :2] if points else np.empty((0, 2), dtype=np.float64)
 
 
+def _trajectory_points(func: MultivariateFunction, run: ExperimentRun) -> FloatArray:
+    start = as_2d_point(func.initial_point())
+    points = _history_points(run)
+    if points.size == 0:
+        return start.reshape(1, 2)
+    if not np.allclose(points[0], start, rtol=0.0, atol=1e-12):
+        points = np.vstack([start, points])
+    return points
+
+
+def as_2d_point(point: FloatArray) -> FloatArray:
+    vector = np.asarray(point, dtype=np.float64).reshape(-1)
+    return vector[:2]
+
+
 def _limits(func: MultivariateFunction, results: Iterable[ExperimentRun]) -> tuple[float, float, float, float]:
     points = [func.initial_point()]
     points.extend(func.global_minimizers)
     for run in results:
-        history = _history_points(run)
+        history = _trajectory_points(func, run)
         if history.size:
             points.extend(history)
         if run.result is not None and not isinstance(run.result.x, float) and max_abs(run.result.x[:2]) <= _MAX_PLOT_COORDINATE:
@@ -54,6 +68,12 @@ def _limits(func: MultivariateFunction, results: Iterable[ExperimentRun]) -> tup
 
 def contour_limits(func: MultivariateFunction, results: Iterable[ExperimentRun]) -> tuple[float, float, float, float]:
     """Return shared contour limits for Lab 2 and Lab 3 trajectory plots."""
+    if func.name == "Ackley":
+        x_min, x_max, y_min, y_max = _limits(func, results)
+        center_x = 0.5 * (x_min + x_max)
+        center_y = 0.5 * (y_min + y_max)
+        half_width = max(1.1, 0.5 * max(x_max - x_min, y_max - y_min))
+        return center_x - half_width, center_x + half_width, center_y - half_width, center_y + half_width
     return _FIXED_LIMITS.get(func.name, _limits(func, results))
 
 
@@ -87,6 +107,7 @@ def _draw_shared_contours(
     values: FloatArray,
     *,
     filled_levels: int,
+    colorbar: bool = True,
 ) -> None:
     finite = values[np.isfinite(values)]
     if finite.size == 0:
@@ -94,7 +115,8 @@ def _draw_shared_contours(
     if func.name == "Ackley":
         contour = ax.contourf(xx, yy, values, levels=_ACKLEY_LEVELS, cmap="viridis", extend="max")
         ax.contour(xx, yy, values, levels=_ACKLEY_LEVELS, colors="black", linewidths=0.35, alpha=0.45)
-        fig.colorbar(contour, ax=ax, label="f(x)")
+        if colorbar:
+            fig.colorbar(contour, ax=ax, label="f(x)")
         return
 
     positive = finite[finite > 0.0]
@@ -128,39 +150,28 @@ def _draw_shared_contours(
     else:
         contour = ax.contourf(xx, yy, values, levels=filled_levels, cmap="viridis")
         ax.contour(xx, yy, values, levels=14, colors="black", linewidths=0.25, alpha=0.25)
-    fig.colorbar(contour, ax=ax, label="f(x)")
+    if colorbar:
+        fig.colorbar(contour, ax=ax, label="f(x)")
 
 
-def plot_trajectory_contours(
+def _draw_trajectory_runs(
+    ax: plt.Axes,
     func: MultivariateFunction,
     results: list[ExperimentRun],
-    output_dir: Path,
-    basename: str,
+    limits: tuple[float, float, float, float],
     *,
-    title: str | None = None,
     run_label: Callable[[ExperimentRun], str] | None = None,
-    grid_size: int = 260,
-    filled_levels: int = 55,
-    figsize: tuple[float, float] = (8.2, 6.2),
     legend_fontsize: float = 6.6,
     legend_loc: str = "best",
     legend_ncol: int = 1,
     start_text: str | None = None,
     show_arrows: bool = False,
-) -> dict[str, Path]:
-    """Plot shared contour background with optimization trajectories."""
-    output_dir.mkdir(parents=True, exist_ok=True)
-    limits = contour_limits(func, results)
+) -> None:
     x_min, x_max, y_min, y_max = limits
-    xx, yy, values = _surface_values(func, limits, grid_size)
-
-    fig, ax = plt.subplots(figsize=figsize)
-    _draw_shared_contours(fig, ax, func, xx, yy, values, filled_levels=filled_levels)
-
-    colors = ["#d55e00", "#0072b2", "#009e73", "#cc79a7", "#f0e442", "#56b4e9", "#332288", "#88ccee"]
+    colors = ["#d55e00", "#0072b2", "#cc79a7", "#332288", "#ee6677", "#882255", "#000000", "#56b4e9"]
     linestyles = ["-", "--", "-.", ":", "-", "--", "-.", ":"]
     for index, run in enumerate(results):
-        points = _history_points(run)
+        points = _trajectory_points(func, run)
         if points.size == 0:
             continue
         mask = (points[:, 0] >= x_min) & (points[:, 0] <= x_max) & (points[:, 1] >= y_min) & (points[:, 1] <= y_max)
@@ -195,15 +206,58 @@ def plot_trajectory_contours(
                 alpha=0.55,
             )
 
-    start = func.initial_point()
+    start = as_2d_point(func.initial_point())
     ax.scatter(start[0], start[1], marker="X", s=100, c="white", edgecolors="black", linewidths=1.1, label="start")
     if start_text is not None:
         ax.text(start[0] + 0.08, start[1] - 0.16, start_text, color="white", fontsize=9, weight="bold")
     for minimizer in func.global_minimizers:
-        ax.scatter(minimizer[0], minimizer[1], marker="*", s=170, c="gold", edgecolors="black", linewidths=0.9)
+        minimizer_point = as_2d_point(minimizer)
+        ax.scatter(minimizer_point[0], minimizer_point[1], marker="*", s=170, c="gold", edgecolors="black", linewidths=0.9)
     ax.scatter([], [], marker="*", s=130, c="gold", edgecolors="black", linewidths=0.9, label="global min")
     if results:
         ax.scatter([], [], marker="s", s=42, c="white", edgecolors="black", linewidths=0.7, label="final")
+
+    if results:
+        ax.legend(fontsize=legend_fontsize, loc=legend_loc, framealpha=0.88, ncol=legend_ncol)
+
+
+def plot_trajectory_contours(
+    func: MultivariateFunction,
+    results: list[ExperimentRun],
+    output_dir: Path,
+    basename: str,
+    *,
+    title: str | None = None,
+    run_label: Callable[[ExperimentRun], str] | None = None,
+    grid_size: int = 260,
+    filled_levels: int = 55,
+    figsize: tuple[float, float] = (8.2, 6.2),
+    legend_fontsize: float = 6.6,
+    legend_loc: str = "best",
+    legend_ncol: int = 1,
+    start_text: str | None = None,
+    show_arrows: bool = False,
+) -> dict[str, Path]:
+    """Plot shared contour background with optimization trajectories."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    limits = contour_limits(func, results)
+    x_min, x_max, y_min, y_max = limits
+    xx, yy, values = _surface_values(func, limits, grid_size)
+
+    fig, ax = plt.subplots(figsize=figsize)
+    _draw_shared_contours(fig, ax, func, xx, yy, values, filled_levels=filled_levels)
+    _draw_trajectory_runs(
+        ax,
+        func,
+        results,
+        limits,
+        run_label=run_label,
+        legend_fontsize=legend_fontsize,
+        legend_loc=legend_loc,
+        legend_ncol=legend_ncol,
+        start_text=start_text,
+        show_arrows=show_arrows,
+    )
 
     ax.set_xlim(x_min, x_max)
     ax.set_ylim(y_min, y_max)
@@ -211,11 +265,61 @@ def plot_trajectory_contours(
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     ax.grid(True, alpha=0.18)
-    if results:
-        ax.legend(fontsize=legend_fontsize, loc=legend_loc, framealpha=0.88, ncol=legend_ncol)
     plt.tight_layout()
     png = output_dir / f"{basename}.png"
     fig.savefig(png, dpi=300)
+    plt.close(fig)
+    return {"png": png}
+
+
+def plot_trajectory_contour_panels(
+    func: MultivariateFunction,
+    groups: Sequence[tuple[str, list[ExperimentRun]]],
+    output_dir: Path,
+    basename: str,
+    *,
+    title: str | None = None,
+    run_label: Callable[[ExperimentRun], str] | None = None,
+    grid_size: int = 240,
+    filled_levels: int = 45,
+    figsize: tuple[float, float] = (16.0, 6.2),
+    legend_fontsize: float = 6.2,
+    show_arrows: bool = False,
+) -> dict[str, Path]:
+    """Plot trajectory groups as separate contour panels in one figure."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    non_empty_groups = [(name, runs) for name, runs in groups if runs]
+    if not non_empty_groups:
+        return {}
+    all_runs = [run for _, runs in non_empty_groups for run in runs]
+    limits = contour_limits(func, all_runs)
+    xx, yy, values = _surface_values(func, limits, grid_size)
+
+    fig, axes = plt.subplots(1, len(non_empty_groups), figsize=figsize, squeeze=False, sharex=True, sharey=True)
+    for ax, (group_name, runs) in zip(axes[0], non_empty_groups, strict=True):
+        _draw_shared_contours(fig, ax, func, xx, yy, values, filled_levels=filled_levels, colorbar=False)
+        _draw_trajectory_runs(
+            ax,
+            func,
+            runs,
+            limits,
+            run_label=run_label,
+            legend_fontsize=legend_fontsize,
+            legend_loc="best",
+            show_arrows=show_arrows,
+        )
+        x_min, x_max, y_min, y_max = limits
+        ax.set_xlim(x_min, x_max)
+        ax.set_ylim(y_min, y_max)
+        ax.set_title(group_name)
+        ax.set_xlabel("x")
+        ax.grid(True, alpha=0.18)
+    axes[0][0].set_ylabel("y")
+    if title:
+        fig.suptitle(title, y=1.02)
+    plt.tight_layout()
+    png = output_dir / f"{basename}.png"
+    fig.savefig(png, dpi=300, bbox_inches="tight")
     plt.close(fig)
     return {"png": png}
 

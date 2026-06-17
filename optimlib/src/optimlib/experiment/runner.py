@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from optimlib.core.base import OptimizationResult
@@ -30,6 +31,20 @@ class ExperimentRun:
     result: OptimizationResult | None
     function_params: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
+    grad_norm: float | None = None
+
+
+def _final_grad_norm(func: Any, result: OptimizationResult) -> float | None:
+    """Return the final gradient norm for reporting without changing result counters."""
+    if result.history:
+        grad = result.history[-1].grad
+        if grad is not None:
+            return float(np.linalg.norm(np.asarray(grad, dtype=np.float64).reshape(-1)))
+    try:
+        grad = func.gradient(result.x)
+    except Exception:
+        return None
+    return float(np.linalg.norm(np.asarray(grad, dtype=np.float64).reshape(-1)))
 
 
 def _run_single(
@@ -44,6 +59,7 @@ def _run_single(
         func.reset_count()
         optimizer = GLOBAL_REGISTRY.get_optimizer(optimizer_spec.name, **optimizer_spec.params)
         result = optimizer.minimize(func, optimizer_config)
+        grad_norm = _final_grad_norm(func, result)
         return ExperimentRun(
             function_config.name,
             optimizer_spec.name,
@@ -51,6 +67,7 @@ def _run_single(
             params,
             result,
             dict(function_config.params),
+            grad_norm=grad_norm,
         )
     except Exception as exc:
         LOGGER.debug("Experiment combination failed.", exc_info=True)
@@ -124,6 +141,7 @@ class OptimizationExperiment:
                 "converged": None if result is None else result.converged,
                 "x": None if result is None else (float(result.x) if isinstance(result.x, float) else result.x.tolist()),
                 "f": None if result is None else result.f,
+                "grad_norm": run.grad_norm,
                 "n_iter": None if result is None else result.n_iter,
                 "n_calls": None if result is None else result.n_calls,
                 "n_grad_calls": None if result is None else result.n_grad_calls,

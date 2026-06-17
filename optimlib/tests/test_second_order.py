@@ -5,6 +5,7 @@ import pytest
 
 import optimlib  # noqa: F401
 import lab4.functions  # noqa: F401
+import optimlib.optimizers.second_order as second_order
 from lab4.functions import GeneratedQuadratic
 from optimlib.core.base import OptimizationResult
 from optimlib.core.config import OptimizerConfig
@@ -21,8 +22,8 @@ from optimlib.optimizers.second_order import (
 )
 
 
-def _config(max_iter: int = 220) -> OptimizerConfig:
-    return OptimizerConfig(
+def _config(max_iter: int = 220, **overrides: object) -> OptimizerConfig:
+    data = dict(
         max_iter=max_iter,
         tol_grad=1e-6,
         tol_step=1e-14,
@@ -31,10 +32,23 @@ def _config(max_iter: int = 220) -> OptimizerConfig:
         trust_radius_initial=1.0,
         m=5,
     )
+    data.update(overrides)
+    return OptimizerConfig(**data)
 
 
 def _quadratic(condition_number: float = 10.0) -> GeneratedQuadratic:
     return GeneratedQuadratic(n=5, k=condition_number, seed=2, random_orthogonal=True, start_scale=2.0)
+
+
+def _indefinite_quadratic() -> GeneratedQuadratic:
+    class IndefiniteQuadratic(GeneratedQuadratic):
+        def __init__(self) -> None:
+            super().__init__(n=2, k=1.0, seed=0, random_orthogonal=False, x_star=[0.0, 0.0], x0=[2.0, -1.0])
+            self.a_matrix = np.array([[1.0, 0.0], [0.0, -1.0]], dtype=np.float64)
+            self.b_vector = np.zeros(2, dtype=np.float64)
+            self.c = 0.0
+
+    return IndefiniteQuadratic()
 
 
 def _assert_valid_history(result: OptimizationResult) -> None:
@@ -126,17 +140,48 @@ def test_powell_dog_leg_records_trust_region_diagnostics() -> None:
 
 
 def test_newton_direction_choice_handles_indefinite_hessian() -> None:
-    class IndefiniteQuadratic(GeneratedQuadratic):
-        def __init__(self) -> None:
-            super().__init__(n=2, k=1.0, seed=0, random_orthogonal=False, x_star=[0.0, 0.0], x0=[2.0, -1.0])
-            self.a_matrix = np.array([[1.0, 0.0], [0.0, -1.0]], dtype=np.float64)
-            self.b_vector = np.zeros(2, dtype=np.float64)
-            self.c = 0.0
-
-    func = IndefiniteQuadratic()
+    func = _indefinite_quadratic()
     result = NewtonDirectionChoice().minimize(func, _config(max_iter=5))
 
     assert result.history
     assert result.n_hessian_calls > 0
     assert result.message != "non_positive_definite_hessian"
+    assert result.history[0].extra_metrics["direction"] == "modified_newton"
+    assert result.history[0].extra_metrics["hessian_shift"] > 0.0
     assert all(np.all(np.isfinite(state.x)) for state in result.history)
+
+
+def test_newton_cholesky_stops_on_indefinite_hessian() -> None:
+    func = _indefinite_quadratic()
+    result = NewtonCholesky().minimize(func, _config(max_iter=5))
+
+    assert not result.converged
+    assert result.message == "non_positive_definite_hessian"
+    assert result.n_iter == 0
+    assert result.n_hessian_calls == 1
+    assert result.history == ()
+
+
+def test_newton_direction_choice_uses_plain_newton_on_spd_hessian() -> None:
+    func = _quadratic(condition_number=10.0)
+    result = NewtonDirectionChoice().minimize(func, _config(max_iter=5))
+
+    assert result.converged
+    assert result.history
+    assert result.history[0].extra_metrics["direction"] == "newton"
+    assert result.history[0].extra_metrics["hessian_shift"] == 0.0
+
+
+def test_newton_direction_choice_falls_back_to_steepest_descent(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail_cholesky(matrix: np.ndarray, rhs: np.ndarray) -> np.ndarray:
+        raise np.linalg.LinAlgError("forced failure")
+
+    monkeypatch.setattr(second_order, "_solve_cholesky", fail_cholesky)
+    grad = np.array([2.0, 1.0], dtype=np.float64)
+    hessian = np.array([[1.0, 0.0], [0.0, -1.0]], dtype=np.float64)
+
+    direction, direction_kind, shift = NewtonDirectionChoice()._direction(hessian, grad, _config())
+
+    assert direction_kind == "steepest_descent"
+    np.testing.assert_allclose(direction, -grad)
+    assert shift > 0.0

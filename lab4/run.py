@@ -20,12 +20,13 @@ import lab4.functions  # noqa: F401,E402
 from optimlib.experiment.runner import ExperimentRun, OptimizationExperiment  # noqa: E402
 from optimlib.functions.base import MultivariateFunction  # noqa: E402
 from optimlib.utils.registry import GLOBAL_REGISTRY  # noqa: E402
-from optimlib.visualization.contour import plot_contours_and_trajectories  # noqa: E402
 from optimlib.visualization.lab4 import (  # noqa: E402
+    plot_lab4_grouped_trajectories,
     plot_lab4_lbfgs_memory,
     plot_lab4_metric_dependencies,
     plot_lab4_metric_tables,
     plot_lab4_optimizer_comparison,
+    save_lab4_report_tables,
 )
 
 
@@ -35,20 +36,6 @@ def _variant_basename(function_name: str, function_params: dict[str, Any]) -> st
     compact = json.dumps(function_params, sort_keys=True, separators=(",", ":"))
     safe = re.sub(r"[^0-9A-Za-z_.-]+", "_", compact)
     return f"{function_name}_{safe}"
-
-
-def _best_runs_per_optimizer(runs: list[ExperimentRun]) -> list[ExperimentRun]:
-    """Pick one run per optimizer; for L-BFGS this also picks the best memory size."""
-    converged = [run for run in runs if run.result is not None and run.result.converged]
-    pool = converged if converged else [run for run in runs if run.result is not None]
-    by_optimizer: dict[str, ExperimentRun] = {}
-    for run in pool:
-        assert run.result is not None
-        previous = by_optimizer.get(run.optimizer_name)
-        previous_result = None if previous is None else previous.result
-        if previous is None or previous_result is None or run.result.n_iter < previous_result.n_iter:
-            by_optimizer[run.optimizer_name] = run
-    return list(by_optimizer.values())
 
 
 def _plot_metrics(plots: dict[str, Any]) -> list[str]:
@@ -109,13 +96,13 @@ def main() -> None:
                 and run.function_params == dict(function_config.params)
                 and abs(run.tolerance - trajectory_tolerance) <= tol_scale
             ]
-            best = _best_runs_per_optimizer(family)
-            if not best:
+            if not family:
                 continue
             stem = _variant_basename(function_config.name, dict(function_config.params))
-            plot_paths.update(plot_contours_and_trajectories(func, best, plot_dir, f"{stem}_trajectories"))
+            plot_paths.update(plot_lab4_grouped_trajectories(func, family, plot_dir, stem))
 
     table_paths = experiment.save_tables()
+    table_paths.update(save_lab4_report_tables(runs, experiment.config.output_dir))
     print(f"Lab 4 completed: {len(runs)} runs")
     for name, path in table_paths.items():
         print(f"{name}: {path}")

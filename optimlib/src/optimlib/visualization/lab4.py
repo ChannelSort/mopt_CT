@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,7 +11,16 @@ import pandas as pd
 import seaborn as sns
 
 from optimlib.experiment.runner import ExperimentRun
+from optimlib.functions.base import MultivariateFunction
 from optimlib.visualization.base import numeric_result_metric, safe_stem
+from optimlib.visualization.contour import plot_trajectory_contour_panels
+
+
+LAB4_TRAJECTORY_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("CG", ("QuadraticConjugateGradient", "FletcherReeves", "PolakRibiere")),
+    ("Newton / trust-region", ("NewtonCholesky", "NewtonDirectionChoice", "PowellDogLeg", "ScipyNewtonCG")),
+    ("Quasi-Newton", ("DFP", "BFGS", "LBFGS")),
+)
 
 
 def _lab4_metric_rows(results: list[ExperimentRun], metrics: Sequence[str] | None = None) -> list[dict[str, object]]:
@@ -38,6 +47,232 @@ def _lab4_metric_rows(results: list[ExperimentRun], metrics: Sequence[str] | Non
                 }
             )
     return rows
+
+
+def _is_finite_result(run: ExperimentRun) -> bool:
+    return run.result is not None and np.isfinite(run.result.f)
+
+
+def _representative_run(runs: list[ExperimentRun], optimizer: str) -> ExperimentRun | None:
+    candidates = [run for run in runs if run.optimizer_name == optimizer and _is_finite_result(run)]
+    if not candidates:
+        return None
+    converged = [run for run in candidates if run.result is not None and run.result.converged]
+    pool = converged if converged else candidates
+    return min(pool, key=lambda run: run.result.n_iter if run.result is not None else 10**18)
+
+
+def _compact_params(params: dict[str, Any]) -> str:
+    if not params:
+        return "{}"
+    parts = []
+    for key in sorted(params):
+        value = params[key]
+        parts.append(f"{key}={float(value):g}" if isinstance(value, int | float) else f"{key}={value}")
+    return ", ".join(parts)
+
+
+def _latex_escape(value: object) -> str:
+    text = "" if value is None else str(value)
+    replacements = {
+        "\\": r"\textbackslash{}",
+        "&": r"\&",
+        "%": r"\%",
+        "$": r"\$",
+        "#": r"\#",
+        "_": r"\_",
+        "{": r"\{",
+        "}": r"\}",
+        "~": r"\textasciitilde{}",
+        "^": r"\textasciicircum{}",
+    }
+    return "".join(replacements.get(char, char) for char in text)
+
+
+def _format_float(value: float | None) -> str:
+    if value is None or not np.isfinite(value):
+        return "nan"
+    if value == 0.0:
+        return "0"
+    if abs(value) < 1e-3 or abs(value) >= 1e4:
+        return f"{value:.3e}"
+    return f"{value:.6g}"
+
+
+def _short_stop(run: ExperimentRun) -> str:
+    if run.result is None:
+        return "error"
+    message = run.result.message.lower()
+    if run.result.converged and "gradient norm" in message:
+        return "grad_tol"
+    if "maximum iterations" in message:
+        return "max_iter"
+    if "step tolerance" in message:
+        return "step_tol"
+    if "non_positive_definite_hessian" in message:
+        return "not_spd_hessian"
+    if "non_descent_newton_direction" in message:
+        return "non_descent"
+    if run.result.converged:
+        return "converged"
+    return "stopped"
+
+
+def _function_label(run: ExperimentRun) -> str:
+    if run.function_name == "GeneratedQuadratic":
+        n = run.function_params.get("n", "--")
+        k = run.function_params.get("k", "--")
+        seed = run.function_params.get("seed", "--")
+        return f"Q(n={n}, k={k}, seed={seed})"
+    x0 = run.function_params.get("x0")
+    if x0 is not None:
+        return f"{run.function_name}, x0={x0}"
+    return run.function_name
+
+
+def _direction_counts(run: ExperimentRun) -> tuple[int, int, int, float]:
+    if run.result is None:
+        return 0, 0, 0, 0.0
+    newton = 0
+    modified = 0
+    steepest = 0
+    max_shift = 0.0
+    for state in run.result.history:
+        direction = state.extra_metrics.get("direction")
+        if direction == "newton":
+            newton += 1
+        elif direction == "modified_newton":
+            modified += 1
+        elif direction == "steepest_descent":
+            steepest += 1
+        shift = state.extra_metrics.get("hessian_shift")
+        if isinstance(shift, int | float):
+            max_shift = max(max_shift, float(shift))
+    return newton, modified, steepest, max_shift
+
+
+def plot_lab4_grouped_trajectories(
+    func: MultivariateFunction,
+    family: list[ExperimentRun],
+    output_dir: Path,
+    stem: str,
+) -> dict[str, Path]:
+    """Plot Lab 4 trajectories as method-family panels."""
+    groups: list[tuple[str, list[ExperimentRun]]] = []
+    for title, optimizers in LAB4_TRAJECTORY_GROUPS:
+        selected = [_representative_run(family, optimizer) for optimizer in optimizers]
+        runs = [run for run in selected if run is not None]
+        if runs:
+            groups.append((title, runs))
+    return plot_trajectory_contour_panels(
+        func,
+        groups,
+        output_dir,
+        f"{stem}_trajectory_panels",
+        title=f"{func.name}: trajectories",
+        run_label=lambda run: run.optimizer_name if run.optimizer_name != "LBFGS" else f"LBFGS m={run.params.get('m')}",
+        show_arrows=True,
+    )
+
+
+def save_lab4_report_tables(runs: list[ExperimentRun], output_dir: Path) -> dict[str, Path]:
+    """Save compact LaTeX tables used by the Lab 4 report."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    paths: dict[str, Path] = {}
+    paths["summary_report_scaled"] = _save_lab4_summary_report(runs, output_dir / "summary_report_scaled.tex")
+    paths["newton_direction_diagnostics"] = _save_newton_direction_diagnostics(runs, output_dir / "newton_direction_diagnostics.tex")
+    return paths
+
+
+def _save_lab4_summary_report(runs: list[ExperimentRun], path: Path, block_size: int = 38) -> Path:
+    sorted_runs = sorted(
+        runs,
+        key=lambda run: (
+            run.function_name,
+            str(run.function_params),
+            run.optimizer_name,
+            str(run.params),
+        ),
+    )
+    lines = [
+        r"\begingroup",
+        r"\scriptsize",
+        r"\setlength{\tabcolsep}{2.2pt}",
+    ]
+    for block_index, start in enumerate(range(0, len(sorted_runs), block_size), start=1):
+        block = sorted_runs[start : start + block_size]
+        lines.extend(
+            [
+                r"\begin{table}[H]",
+                r"\centering",
+                rf"\caption{{Полная таблица экспериментов, блок {block_index}}}",
+                r"\fitreporttable{%",
+                r"\begin{tabular}{llllrrrrrrl}",
+                r"\toprule",
+                r"Function & Optimizer & params & conv & $f(x_k)$ & $\|g_k\|$ & iter & $N_f$ & $N_g$ & $N_H$ & Stop\\",
+                r"\midrule",
+            ]
+        )
+        for run in block:
+            result = run.result
+            row = [
+                _function_label(run),
+                run.optimizer_name,
+                _compact_params(run.params),
+                "--" if result is None else ("yes" if result.converged else "no"),
+                "--" if result is None else _format_float(result.f),
+                _format_float(run.grad_norm),
+                "--" if result is None else str(result.n_iter),
+                "--" if result is None else str(result.n_calls),
+                "--" if result is None else str(result.n_grad_calls),
+                "--" if result is None else str(result.n_hessian_calls),
+                _short_stop(run),
+            ]
+            lines.append(" & ".join(_latex_escape(item) for item in row) + r"\\")
+        lines.extend([r"\bottomrule", r"\end{tabular}%", r"}", r"\end{table}", ""])
+    lines.append(r"\endgroup")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def _save_newton_direction_diagnostics(runs: list[ExperimentRun], path: Path) -> Path:
+    grouped: dict[str, dict[str, float | int]] = {}
+    for run in runs:
+        if run.optimizer_name != "NewtonDirectionChoice" or run.result is None:
+            continue
+        key = run.function_name
+        item = grouped.setdefault(key, {"runs": 0, "newton": 0, "modified": 0, "steepest": 0, "max_shift": 0.0})
+        newton, modified, steepest, max_shift = _direction_counts(run)
+        item["runs"] = int(item["runs"]) + 1
+        item["newton"] = int(item["newton"]) + newton
+        item["modified"] = int(item["modified"]) + modified
+        item["steepest"] = int(item["steepest"]) + steepest
+        item["max_shift"] = max(float(item["max_shift"]), max_shift)
+
+    lines = [
+        r"\begin{table}[H]",
+        r"\centering",
+        r"\caption{Диагностика выбора направления в NewtonDirectionChoice}",
+        r"\fitreporttable{%",
+        r"\begin{tabular}{lrrrrr}",
+        r"\toprule",
+        r"Функция & Запусков & newton & modified\_newton & steepest\_descent & max $\lambda$\\",
+        r"\midrule",
+    ]
+    for name in sorted(grouped):
+        item = grouped[name]
+        row = [
+            name,
+            str(item["runs"]),
+            str(item["newton"]),
+            str(item["modified"]),
+            str(item["steepest"]),
+            _format_float(float(item["max_shift"])),
+        ]
+        lines.append(" & ".join(_latex_escape(value) for value in row) + r"\\")
+    lines.extend([r"\bottomrule", r"\end{tabular}%", r"}", r"\end{table}"])
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
 
 
 def plot_lab4_metric_tables(

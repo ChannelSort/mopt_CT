@@ -31,6 +31,7 @@ from optimlib.visualization.regression import (  # noqa: E402
     plot_lab5_method_comparison,
     plot_lab5_regression_fit,
     plot_lab5_regularization_comparison,
+    save_lab5_report_tables,
 )
 
 
@@ -56,8 +57,14 @@ def _is_unregularized(run: ExperimentRun) -> bool:
     return float(run.function_params.get("lambda_l1", 0.0)) == 0.0 and float(run.function_params.get("lambda_l2", 0.0)) == 0.0
 
 
+def _is_meaningful_run(run: ExperimentRun) -> bool:
+    if run.result is None:
+        return False
+    return "not_applicable" not in run.result.message.lower()
+
+
 def _best_runs_per_optimizer(runs: list[ExperimentRun]) -> list[ExperimentRun]:
-    pool = [run for run in runs if run.result is not None]
+    pool = [run for run in runs if _is_meaningful_run(run)]
     by_optimizer: dict[str, ExperimentRun] = {}
     for run in pool:
         assert run.result is not None
@@ -66,6 +73,32 @@ def _best_runs_per_optimizer(runs: list[ExperimentRun]) -> list[ExperimentRun]:
         if previous is None or previous_result is None or run.result.f < previous_result.f:
             by_optimizer[run.optimizer_name] = run
     return list(by_optimizer.values())
+
+
+def _regularization_fit_runs(runs: list[ExperimentRun]) -> list[ExperimentRun]:
+    selected_pairs = {
+        (0.0, 0.0),
+        (0.01, 0.0),
+        (1.0, 0.0),
+        (0.0, 0.01),
+        (0.0, 1.0),
+        (0.01, 0.01),
+        (1.0, 1.0),
+    }
+    selected: list[ExperimentRun] = []
+    for run in runs:
+        l1 = float(run.function_params.get("lambda_l1", 0.0) or 0.0)
+        l2 = float(run.function_params.get("lambda_l2", 0.0) or 0.0)
+        if (l1, l2) in selected_pairs and _is_meaningful_run(run):
+            selected.append(run)
+    return sorted(
+        selected,
+        key=lambda run: (
+            float(run.function_params.get("lambda_l1", 0.0) or 0.0) + float(run.function_params.get("lambda_l2", 0.0) or 0.0),
+            float(run.function_params.get("lambda_l1", 0.0) or 0.0),
+            float(run.function_params.get("lambda_l2", 0.0) or 0.0),
+        ),
+    )
 
 
 def _save_tables(runs: list[ExperimentRun], experiment: OptimizationExperiment) -> dict[str, Path]:
@@ -153,6 +186,8 @@ def _instantiate_function(function_name: str, function_params: dict[str, Any]) -
 def main() -> None:
     """Execute Lab 5, save readable tables and report-oriented plots."""
     experiment = OptimizationExperiment.from_yaml(Path(__file__).with_name("config.yaml"))
+    if not experiment.config.output_dir.is_absolute():
+        experiment.config = experiment.config.model_copy(update={"output_dir": ROOT / experiment.config.output_dir})
     runs = experiment.execute()
     table_paths = _save_tables(runs, experiment)
     plot_dir = experiment.config.output_dir / "plots"
@@ -160,7 +195,8 @@ def main() -> None:
     plots = experiment.config.plots
 
     if bool(plots.get("predictions", True)):
-        selected_optimizer = str(plots.get("selected_optimizer_for_predictions", "LevenbergMarquardt"))
+        selected_optimizer_config = plots.get("selected_optimizer_for_predictions", "all")
+        selected_optimizer = None if str(selected_optimizer_config).lower() in {"all", "*", "none"} else str(selected_optimizer_config)
         for function_config in experiment.config.normalized_functions():
             if float(function_config.params.get("lambda_l1", 0.0)) != 0.0 or float(function_config.params.get("lambda_l2", 0.0)) != 0.0:
                 continue
@@ -172,12 +208,12 @@ def main() -> None:
                 for run in runs
                 if run.function_name == function_config.name
                 and run.function_params == dict(function_config.params)
-                and run.optimizer_name == selected_optimizer
-                and run.result is not None
+                and (selected_optimizer is None or run.optimizer_name == selected_optimizer)
+                and _is_meaningful_run(run)
             ]
             if family:
                 stem = _variant_basename(function_config.name, dict(function_config.params))
-                plot_paths.update(plot_lab5_regression_fit(func, family, plot_dir, f"{stem}_fit"))
+                plot_paths.update(plot_lab5_regression_fit(func, _best_runs_per_optimizer(family), plot_dir, f"{stem}_fit"))
 
     history_names = plots.get("history_optimizers", [])
     history_filter = {str(name) for name in history_names} if isinstance(history_names, list) else set[str]()
@@ -190,7 +226,7 @@ def main() -> None:
             if run.function_name == function_config.name
             and run.function_params == dict(function_config.params)
             and (not history_filter or run.optimizer_name in history_filter)
-            and run.result is not None
+            and _is_meaningful_run(run)
         ]
         if not family:
             continue
@@ -208,7 +244,7 @@ def main() -> None:
         if run.optimizer_name == "MiniBatchGradientDescent"
         and _match_params(run, dataset_kind="nonlinear", degree=5)
         and _is_unregularized(run)
-        and run.result is not None
+        and _is_meaningful_run(run)
     ]
     if bool(plots.get("batch_sizes", True)) and batch_runs:
         plot_paths.update(plot_lab5_batch_size_comparison(batch_runs, plot_dir))
@@ -218,16 +254,29 @@ def main() -> None:
         for run in runs
         if _match_params(run, dataset_kind="nonlinear", degree=5)
         and run.optimizer_name == "LevenbergMarquardt"
-        and run.result is not None
+        and _is_meaningful_run(run)
     ]
     if bool(plots.get("regularization", True)) and regularized_runs:
         plot_paths.update(plot_lab5_regularization_comparison(regularized_runs, plot_dir))
         plot_paths.update(plot_lab5_coefficients(regularized_runs, plot_dir, "lab5_regularized_coefficients"))
+        base_params = {
+            "dataset_kind": "nonlinear",
+            "degree": 5,
+            "n_points": 120,
+            "x_range": [-2.5, 2.5],
+            "noise_variance": 0.09,
+            "seed": 17,
+        }
+        func = _instantiate_function("PolynomialRegressionObjective", base_params)
+        fit_runs = _regularization_fit_runs(regularized_runs)
+        if func is not None and fit_runs:
+            plot_paths.update(plot_lab5_regression_fit(func, fit_runs, plot_dir, "lab5_regularization_fit"))
 
     if bool(plots.get("method_comparison", True)):
-        comparison_runs = [run for run in runs if _is_unregularized(run) and run.result is not None]
+        comparison_runs = [run for run in runs if _is_unregularized(run) and _is_meaningful_run(run)]
         plot_paths.update(plot_lab5_method_comparison(comparison_runs, plot_dir))
 
+    table_paths.update(save_lab5_report_tables(runs, experiment.config.output_dir / "tables"))
     print(f"Lab 5 completed: {len(runs)} runs")
     for name, path in table_paths.items():
         print(f"{name}: {path}")

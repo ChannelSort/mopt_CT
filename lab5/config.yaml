@@ -116,5 +116,5 @@ plots:
   regularization: true
   coefficients: true
   method_comparison: true
-  selected_optimizer_for_predictions: LevenbergMarquardt
+  selected_optimizer_for_predictions: all
   history_optimizers: [StochasticGradientDescent, MiniBatchGradientDescent, GaussNewton, LevenbergMarquardt]
