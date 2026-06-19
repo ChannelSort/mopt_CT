@@ -166,6 +166,7 @@ def _draw_trajectory_runs(
     legend_ncol: int = 1,
     start_text: str | None = None,
     show_arrows: bool = False,
+    show_legend: bool = True,
 ) -> None:
     x_min, x_max, y_min, y_max = limits
     colors = ["#d55e00", "#0072b2", "#cc79a7", "#332288", "#ee6677", "#882255", "#000000", "#56b4e9"]
@@ -217,7 +218,7 @@ def _draw_trajectory_runs(
     if results:
         ax.scatter([], [], marker="s", s=42, c="white", edgecolors="black", linewidths=0.7, label="final")
 
-    if results:
+    if results and show_legend:
         ax.legend(fontsize=legend_fontsize, loc=legend_loc, framealpha=0.88, ncol=legend_ncol)
 
 
@@ -282,11 +283,11 @@ def plot_trajectory_contour_panels(
     run_label: Callable[[ExperimentRun], str] | None = None,
     grid_size: int = 240,
     filled_levels: int = 45,
-    figsize: tuple[float, float] = (16.0, 6.2),
+    figsize: tuple[float, float] = (16.0, 13.6),
     legend_fontsize: float = 6.2,
     show_arrows: bool = False,
 ) -> dict[str, Path]:
-    """Plot trajectory groups as separate contour panels in one figure."""
+    """Plot trajectory groups as method-level contour panels in one figure."""
     output_dir.mkdir(parents=True, exist_ok=True)
     non_empty_groups = [(name, runs) for name, runs in groups if runs]
     if not non_empty_groups:
@@ -295,29 +296,40 @@ def plot_trajectory_contour_panels(
     limits = contour_limits(func, all_runs)
     xx, yy, values = _surface_values(func, limits, grid_size)
 
-    fig, axes = plt.subplots(1, len(non_empty_groups), figsize=figsize, squeeze=False, sharex=True, sharey=True)
-    for ax, (group_name, runs) in zip(axes[0], non_empty_groups, strict=True):
-        _draw_shared_contours(fig, ax, func, xx, yy, values, filled_levels=filled_levels, colorbar=False)
-        _draw_trajectory_runs(
-            ax,
-            func,
-            runs,
-            limits,
-            run_label=run_label,
-            legend_fontsize=legend_fontsize,
-            legend_loc="best",
-            show_arrows=show_arrows,
-        )
-        x_min, x_max, y_min, y_max = limits
-        ax.set_xlim(x_min, x_max)
-        ax.set_ylim(y_min, y_max)
-        ax.set_title(group_name)
-        ax.set_xlabel("x")
-        ax.grid(True, alpha=0.18)
-    axes[0][0].set_ylabel("y")
+    n_rows = len(non_empty_groups)
+    n_cols = max(len(runs) for _, runs in non_empty_groups)
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize, squeeze=False, sharex=True, sharey=True)
+    x_min, x_max, y_min, y_max = limits
+    for row_index, (group_name, runs) in enumerate(non_empty_groups):
+        for col_index in range(n_cols):
+            ax = axes[row_index][col_index]
+            if col_index >= len(runs):
+                ax.axis("off")
+                continue
+            run = runs[col_index]
+            _draw_shared_contours(fig, ax, func, xx, yy, values, filled_levels=filled_levels, colorbar=False)
+            _draw_trajectory_runs(
+                ax,
+                func,
+                [run],
+                limits,
+                run_label=run_label,
+                legend_fontsize=legend_fontsize,
+                legend_loc="best",
+                show_arrows=show_arrows,
+                show_legend=False,
+            )
+            ax.set_xlim(x_min, x_max)
+            ax.set_ylim(y_min, y_max)
+            label = run_label(run) if run_label else run.optimizer_name
+            ax.set_title(label, fontsize=10)
+            ax.set_xlabel("x")
+            if col_index == 0:
+                ax.set_ylabel(f"{group_name}\ny")
+            ax.grid(True, alpha=0.18)
     if title:
-        fig.suptitle(title, y=1.02)
-    plt.tight_layout()
+        fig.suptitle(title, y=0.995)
+    plt.tight_layout(rect=(0, 0, 1, 0.985))
     png = output_dir / f"{basename}.png"
     fig.savefig(png, dpi=300, bbox_inches="tight")
     plt.close(fig)

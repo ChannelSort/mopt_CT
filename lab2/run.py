@@ -123,6 +123,8 @@ def _save_summary_report_table(experiment: OptimizationExperiment, chunk_size: i
 def main() -> None:
     """Execute Lab 2 and save tables and plots."""
     experiment = OptimizationExperiment.from_yaml(Path(__file__).with_name("config.yaml"))
+    if not experiment.config.output_dir.is_absolute():
+        experiment.config = experiment.config.model_copy(update={"output_dir": ROOT / experiment.config.output_dir})
     traj_tol = float(experiment.config.plots.get("trajectory_tolerance", 1e-8))
     runs = experiment.execute()
     plot_dir = experiment.config.output_dir / "plots"

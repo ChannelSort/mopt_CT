@@ -58,6 +58,8 @@ def _matching_target_runs(runs: list[ExperimentRun], target: object) -> list[Exp
 def main() -> None:
     """Execute Lab 4, save tables, and build Lab 4 plots."""
     experiment = OptimizationExperiment.from_yaml(Path(__file__).with_name("config.yaml"))
+    if not experiment.config.output_dir.is_absolute():
+        experiment.config = experiment.config.model_copy(update={"output_dir": ROOT / experiment.config.output_dir})
     runs = experiment.execute()
     plot_dir = experiment.config.output_dir / "plots"
     plots = experiment.config.plots

@@ -54,6 +54,8 @@ def _best_runs_per_optimizer(runs: list[ExperimentRun]) -> list[ExperimentRun]:
 def main() -> None:
     """Execute Lab 3, save sensitivity plots and best-run trajectories per objective."""
     experiment = OptimizationExperiment.from_yaml(Path(__file__).with_name("config.yaml"))
+    if not experiment.config.output_dir.is_absolute():
+        experiment.config = experiment.config.model_copy(update={"output_dir": ROOT / experiment.config.output_dir})
     traj_tol = float(experiment.config.plots.get("trajectory_tolerance", 1e-8))
     max_iter = int(experiment.config.base_config.max_iter)
     runs = experiment.execute()

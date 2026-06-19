@@ -61,6 +61,24 @@
     \end{figure}
 }
 
+\newcommand{\twoplotlargeplaceholder}[3]{
+    \begin{figure}[H]
+        \centering
+        \IfFileExists{../outputs/lab4/plots/#1}{
+            \includegraphics[width=0.92\textwidth]{#1}
+        }{
+            \fbox{\parbox[c][4cm][c]{0.84\textwidth}{\centering Файл рисунка \texttt{\detokenize{#1}} создается запуском\\\texttt{python lab4/run.py}}}
+        }
+        \vspace{0.35cm}
+        \IfFileExists{../outputs/lab4/plots/#2}{
+            \includegraphics[width=0.92\textwidth]{#2}
+        }{
+            \fbox{\parbox[c][4cm][c]{0.84\textwidth}{\centering Файл рисунка \texttt{\detokenize{#2}} создается запуском\\\texttt{python lab4/run.py}}}
+        }
+        \caption{#3}
+    \end{figure}
+}
+
 \newcommand{\fitreporttable}[1]{
     \par\noindent\resizebox{\linewidth}{!}{#1}\par
 }
@@ -239,9 +257,9 @@ PolakRibiere & 8 & 148.78 & 1727.84 & 307.00 & 0.00\\
 \plotplaceholder{lab4_n_iter_vs_k_n_10.png}{Зависимость числа итераций от числа обусловленности при $n=10$}
 \textit{Комментарий к графику.} При росте $k$ уровни становятся вытянутыми. Методы, которые не учитывают кривизну напрямую, начинают делать больше корректирующих шагов, тогда как ньютоновские направления остаются ближе к оптимальному локальному шагу.
 
-\twoplotplaceholder{lab4_n_calls_vs_n_k_10.png}{lab4_n_calls_vs_k_n_10.png}{Зависимость числа вычислений функции $N_f$ от $n$ при $k=10$ и от $k$ при $n=10$}
-\twoplotplaceholder{lab4_n_grad_calls_vs_n_k_10.png}{lab4_n_grad_calls_vs_k_n_10.png}{Зависимость числа вычислений градиента $N_g$ от $n$ при $k=10$ и от $k$ при $n=10$}
-\twoplotplaceholder{lab4_n_hessian_calls_vs_n_k_10.png}{lab4_n_hessian_calls_vs_k_n_10.png}{Зависимость числа вычислений Гессиана $N_H$ от $n$ при $k=10$ и от $k$ при $n=10$}
+\twoplotlargeplaceholder{lab4_n_calls_vs_n_k_10.png}{lab4_n_calls_vs_k_n_10.png}{Зависимость числа вычислений функции $N_f$ от $n$ при $k=10$ и от $k$ при $n=10$}
+\twoplotlargeplaceholder{lab4_n_grad_calls_vs_n_k_10.png}{lab4_n_grad_calls_vs_k_n_10.png}{Зависимость числа вычислений градиента $N_g$ от $n$ при $k=10$ и от $k$ при $n=10$}
+\twoplotlargeplaceholder{lab4_n_hessian_calls_vs_n_k_10.png}{lab4_n_hessian_calls_vs_k_n_10.png}{Зависимость числа вычислений Гессиана $N_H$ от $n$ при $k=10$ и от $k$ при $n=10$}
 \textit{Комментарий к графикам.} Эти зависимости дополняют графики по итерациям: они показывают фактическую вычислительную цену методов. У CG- и квазиньютоновских методов $N_H$ равен нулю, но растут $N_f$ и $N_g$ из-за линейного поиска и накопления информации о кривизне. У ньютоновских методов число итераций меньше, но каждая итерация требует вычисления Гессиана.
 
 \plotplaceholder{lab4_comparison_n_iter.png}{Среднее число итераций: собственные методы и SciPy Newton-CG}

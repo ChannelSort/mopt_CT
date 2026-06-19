@@ -21,6 +21,8 @@ from optimlib.experiment.runner import OptimizationExperiment
 def main() -> None:
     """Execute Lab 1 and save aggregate tables."""
     experiment = OptimizationExperiment.from_yaml(Path(__file__).with_name("config.yaml"))
+    if not experiment.config.output_dir.is_absolute():
+        experiment.config = experiment.config.model_copy(update={"output_dir": ROOT / experiment.config.output_dir})
     runs = experiment.execute()
     paths = experiment.save_tables()
     print(f"Lab 1 completed: {len(runs)} runs")

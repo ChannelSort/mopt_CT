@@ -18,7 +18,7 @@ from optimlib.visualization.contour import plot_trajectory_contour_panels
 
 LAB4_TRAJECTORY_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("CG", ("QuadraticConjugateGradient", "FletcherReeves", "PolakRibiere")),
-    ("Newton / trust-region", ("NewtonCholesky", "NewtonDirectionChoice", "PowellDogLeg", "ScipyNewtonCG")),
+    ("Newton / trust-region", ("NewtonCholesky", "NewtonDirectionChoice", "PowellDogLeg")),
     ("Quasi-Newton", ("DFP", "BFGS", "LBFGS")),
 )
 
