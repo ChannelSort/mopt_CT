@@ -85,6 +85,14 @@ def _short_stop(run: ExperimentRun) -> str:
         return "max_iter"
     if "step tolerance" in message:
         return "step_tol"
+    if "precision loss" in message:
+        return "precision_loss"
+    if "non_positive_curvature" in message:
+        return "non_pos_curv"
+    if "non_positive_predicted_reduction" in message:
+        return "non_pos_pred"
+    if "optimization terminated successfully" in message:
+        return "scipy_stop"
     if "non_positive_definite_hessian" in message:
         return "not_spd_hessian"
     if "non_descent_newton_direction" in message:
@@ -390,7 +398,18 @@ def _save_problem_cases_table(runs: list[ExperimentRun], path: Path, limit: int 
         or not run.result.converged
         or run.function_name in {"Lab4Himmelblau", "Lab4Ackley", "Lab4Rosenbrock"}
     ]
-    priority = {"not_spd_hessian": 0, "max_iter": 1, "non_descent": 2, "step_tol": 3, "stopped": 4, "grad_tol": 5}
+    priority = {
+        "not_spd_hessian": 0,
+        "non_pos_curv": 1,
+        "non_pos_pred": 2,
+        "precision_loss": 3,
+        "scipy_stop": 4,
+        "max_iter": 5,
+        "non_descent": 6,
+        "step_tol": 7,
+        "stopped": 8,
+        "grad_tol": 9,
+    }
     selected = sorted(
         candidates,
         key=lambda run: (priority.get(_status(run), 9), run.function_name, _start_label(run), run.optimizer_name, str(run.params)),
