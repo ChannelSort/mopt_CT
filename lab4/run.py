@@ -23,6 +23,7 @@ from optimlib.utils.registry import GLOBAL_REGISTRY  # noqa: E402
 from optimlib.visualization.lab4 import (  # noqa: E402
     plot_lab4_grouped_trajectories,
     plot_lab4_lbfgs_memory,
+    plot_lab4_trajectory_overview,
     save_lab4_report_tables,
 )
 
@@ -84,6 +85,7 @@ def main() -> None:
                 continue
             stem = _variant_basename(function_config.name, dict(function_config.params))
             plot_paths.update(plot_lab4_grouped_trajectories(func, family, plot_dir, stem))
+            plot_paths.update(plot_lab4_trajectory_overview(func, family, plot_dir, stem))
 
     table_paths = experiment.save_tables()
     table_paths.update(save_lab4_report_tables(runs, experiment.config.output_dir))

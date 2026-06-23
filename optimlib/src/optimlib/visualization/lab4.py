@@ -11,7 +11,7 @@ import numpy as np
 from optimlib.experiment.runner import ExperimentRun
 from optimlib.functions.base import MultivariateFunction
 from optimlib.visualization.base import numeric_result_metric, safe_stem
-from optimlib.visualization.contour import plot_trajectory_contour_panels
+from optimlib.visualization.contour import plot_trajectory_contour_panels, plot_trajectory_contours
 
 
 LAB4_TRAJECTORY_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -154,6 +154,33 @@ def plot_lab4_grouped_trajectories(
         f"{stem}_trajectory_panels",
         title=f"{func.name}: trajectories",
         run_label=lambda run: run.optimizer_name if run.optimizer_name != "LBFGS" else f"LBFGS m={run.params.get('m')}",
+        show_arrows=True,
+    )
+
+
+def plot_lab4_trajectory_overview(
+    func: MultivariateFunction,
+    family: list[ExperimentRun],
+    output_dir: Path,
+    stem: str,
+) -> dict[str, Path]:
+    """Plot one combined trajectory overview with representative runs."""
+    runs: list[ExperimentRun] = []
+    for _, optimizers in LAB4_TRAJECTORY_GROUPS:
+        for optimizer in optimizers:
+            run = _representative_run(family, optimizer)
+            if run is not None:
+                runs.append(run)
+    if not runs:
+        return {}
+    return plot_trajectory_contours(
+        func,
+        runs,
+        output_dir,
+        f"{stem}_trajectories",
+        title=f"{func.name}: trajectories",
+        run_label=lambda run: run.optimizer_name if run.optimizer_name != "LBFGS" else f"LBFGS {{'m': {run.params.get('m')}}}",
+        legend_fontsize=6.0,
         show_arrows=True,
     )
 

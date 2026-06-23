@@ -50,6 +50,8 @@ def as_2d_point(point: FloatArray) -> FloatArray:
 
 
 def _limits(func: MultivariateFunction, results: Iterable[ExperimentRun]) -> tuple[float, float, float, float]:
+    anchors = [as_2d_point(func.initial_point())]
+    anchors.extend(as_2d_point(minimizer) for minimizer in func.global_minimizers)
     points = [func.initial_point()]
     points.extend(func.global_minimizers)
     for run in results:
@@ -58,9 +60,13 @@ def _limits(func: MultivariateFunction, results: Iterable[ExperimentRun]) -> tup
             points.extend(history)
         if run.result is not None and not isinstance(run.result.x, float) and max_abs(run.result.x[:2]) <= _MAX_PLOT_COORDINATE:
             points.append(run.result.x[:2])
+            anchors.append(as_2d_point(run.result.x))
     stacked = np.vstack(points)
     lower = np.nanpercentile(stacked, 2.0, axis=0)
     upper = np.nanpercentile(stacked, 98.0, axis=0)
+    anchor_stack = np.vstack(anchors)
+    lower = np.minimum(lower, np.min(anchor_stack, axis=0))
+    upper = np.maximum(upper, np.max(anchor_stack, axis=0))
     span = np.maximum(upper - lower, 1.0)
     pad = 0.3 * span
     return float(lower[0] - pad[0]), float(upper[0] + pad[0]), float(lower[1] - pad[1]), float(upper[1] + pad[1])
