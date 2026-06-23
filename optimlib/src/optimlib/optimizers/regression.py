@@ -310,6 +310,8 @@ class StochasticGradientDescent(_RegressionOptimizer):
                     batch_indices = indices[start : start + batch_size]
                     if step_rule == "sqrt_decay":
                         alpha = learning_rate / np.sqrt(update_count + 1.0)
+                    elif step_rule == "epoch_sqrt_decay":
+                        alpha = learning_rate / np.sqrt(epoch + 1.0)
                     elif step_rule == "linear_decay":
                         alpha = learning_rate / (1.0 + lr_decay * update_count)
                     else:

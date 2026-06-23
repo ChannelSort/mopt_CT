@@ -477,13 +477,13 @@ def plot_lab5_batch_size_comparison(
         summary.sort_values("batch").to_csv(csv, index=False)
         fig, axes = plt.subplots(1, 2, figsize=(13.2, 5.0))
         sns.barplot(data=summary, x="batch_label", y="final_loss", hue="batch_label", palette=_palette_for(summary, "batch_label"), legend=False, ax=axes[0])
-        axes[0].set_title("Final full objective L(w), lower is better")
+        axes[0].set_title("Final full objective L(w) after 80 epochs, lower is better")
         axes[0].set_xlabel("batch")
         axes[0].set_ylabel(METRIC_LABELS["loss"])
         axes[0].tick_params(axis="x", rotation=25)
         axes[0].grid(True, axis="y", alpha=0.25)
         sns.barplot(data=summary, x="batch_label", y="loss_reduction_per_1000_grad_calls", hue="batch_label", palette=_palette_for(summary, "batch_label"), legend=False, ax=axes[1])
-        axes[1].set_title("Loss reduction per 1000 gradient calls, higher is better")
+        axes[1].set_title("Total loss reduction per 1000 gradient calls, higher is better")
         axes[1].set_xlabel("batch")
         axes[1].set_ylabel(r"$\Delta L$ / 1000 grad calls")
         axes[1].tick_params(axis="x", rotation=25)
@@ -494,6 +494,93 @@ def plot_lab5_batch_size_comparison(
         plt.close(fig)
         paths["efficiency_csv"] = csv
         paths["efficiency"] = png
+
+        # Fixed-gradient-budget comparison: which batch reaches the lowest loss for the same compute budget.
+        budget_rows: list[dict[str, object]] = []
+        targets = [0.70, 0.65, 0.62]
+        budgets = [500, 1000, 2000]
+        for run in selected_runs:
+            if run.result is None or not run.result.history:
+                continue
+            batch = int(run.params.get("batch_size", run.result.metadata.get("batch_size", 0)))
+            history = list(run.result.history)
+            for budget in budgets:
+                best_loss = None
+                best_grads = None
+                for state in history:
+                    grads = state.extra_metrics.get("gradient_evaluations")
+                    if grads is None:
+                        continue
+                    if grads <= budget and (best_grads is None or grads > best_grads):
+                        best_loss = state.f
+                        best_grads = grads
+                if best_loss is not None:
+                    budget_rows.append(
+                        {
+                            "batch": batch,
+                            "batch_label": _batch_label(batch),
+                            "budget": budget,
+                            "loss_at_budget": float(best_loss),
+                            "grad_evaluations_used": int(best_grads),
+                        }
+                    )
+            for target in targets:
+                reached_grads = None
+                reached_epoch = None
+                for state in history:
+                    if state.f <= target:
+                        reached_grads = state.extra_metrics.get("gradient_evaluations")
+                        reached_epoch = state.extra_metrics.get("epoch", state.iteration)
+                        break
+                budget_rows.append(
+                    {
+                        "batch": batch,
+                        "batch_label": _batch_label(batch),
+                        "budget": f"target_{target}",
+                        "loss_at_budget": float(target),
+                        "grad_evaluations_used": reached_grads if reached_grads is not None else int(run.result.n_grad_calls),
+                        "epochs_to_target": reached_epoch if reached_epoch is not None else None,
+                        "reached": reached_grads is not None,
+                    }
+                )
+        budget_df = pd.DataFrame(budget_rows)
+        if not budget_df.empty:
+            budget_csv = output_dir / f"{basename}_fixed_budget.csv"
+            budget_df.sort_values(["budget", "batch"]).to_csv(budget_csv, index=False)
+            paths["fixed_budget_csv"] = budget_csv
+            numeric_budgets = budget_df[budget_df["budget"].isin(budgets)]
+            if not numeric_budgets.empty:
+                fig, ax = plt.subplots(figsize=(10, 6))
+                sns.barplot(data=numeric_budgets, x="batch_label", y="loss_at_budget", hue="budget", palette="viridis", ax=ax)
+                ax.set_title(r"Loss after a fixed gradient-evaluation budget")
+                ax.set_xlabel("batch size")
+                ax.set_ylabel(METRIC_LABELS["loss"])
+                ax.tick_params(axis="x", rotation=25)
+                ax.grid(True, axis="y", alpha=0.25)
+                ax.legend(title="gradient budget", fontsize=8)
+                plt.tight_layout()
+                budget_png = output_dir / f"{basename}_fixed_budget.png"
+                fig.savefig(budget_png, dpi=300)
+                plt.close(fig)
+                paths["fixed_budget"] = budget_png
+
+            target_rows = budget_df[budget_df["budget"].astype(str).str.startswith("target_")]
+            if not target_rows.empty:
+                fig, ax = plt.subplots(figsize=(10, 6))
+                target_rows = target_rows.copy()
+                target_rows["target"] = target_rows["budget"].astype(str).str.replace("target_", "", regex=False).astype(float)
+                sns.barplot(data=target_rows, x="batch_label", y="grad_evaluations_used", hue="target", palette="viridis", ax=ax)
+                ax.set_title(r"Gradient evaluations needed to reach a target loss")
+                ax.set_xlabel("batch size")
+                ax.set_ylabel("gradient evaluations")
+                ax.tick_params(axis="x", rotation=25)
+                ax.grid(True, axis="y", alpha=0.25)
+                ax.legend(title="target loss", fontsize=8)
+                plt.tight_layout()
+                target_png = output_dir / f"{basename}_target_speed.png"
+                fig.savefig(target_png, dpi=300)
+                plt.close(fig)
+                paths["target_speed"] = target_png
 
         tradeoff = summary.sort_values("batch")
         fig, ax = plt.subplots(figsize=(9.5, 6.0))
