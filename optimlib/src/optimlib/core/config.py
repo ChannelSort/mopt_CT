@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import product
 from pathlib import Path
 from typing import Any
 
@@ -159,20 +160,11 @@ class ParamGridConfig(BaseModel):
     values: dict[str, list[Any]] = Field(default_factory=dict)
 
     def combinations(self) -> list[dict[str, Any]]:
-        """Return cartesian product of parameter values."""
+        """Expand parameter axes so each optimizer run receives one override set."""
         if not self.values:
             return [{}]
-        keys = list(self.values)
-        combinations: list[dict[str, Any]] = [{}]
-        for key in keys:
-            next_combinations: list[dict[str, Any]] = []
-            for base in combinations:
-                for value in self.values[key]:
-                    item = dict(base)
-                    item[key] = value
-                    next_combinations.append(item)
-            combinations = next_combinations
-        return combinations
+        keys = tuple(self.values)
+        return [dict(zip(keys, values, strict=True)) for values in product(*(self.values[key] for key in keys))]
 
 
 class OptimizerSpec(BaseModel):

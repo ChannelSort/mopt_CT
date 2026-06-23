@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
+from itertools import product
 from pathlib import Path
 from typing import Any
 
@@ -97,14 +98,15 @@ class OptimizationExperiment:
         return cls(ExperimentConfig.from_yaml(path))
 
     def execute(self) -> list[ExperimentRun]:
-        """Execute function x optimizer x param_grid x tolerance."""
-        tasks: list[tuple[FunctionConfig, OptimizerSpec, OptimizerConfig, dict[str, Any]]] = []
-        for function_config in self.config.normalized_functions():
-            for optimizer_spec in self.config.normalized_optimizers():
-                for params in optimizer_spec.param_grid.combinations():
-                    for tol in self.config.stopping_tolerances:
-                        optimizer_config = self.config.config_for(tol, params)
-                        tasks.append((function_config, optimizer_spec, optimizer_config, params))
+        """Cover the full declared experiment grid for reproducible reports."""
+        tasks = (
+            (function_config, optimizer_spec, self.config.config_for(tol, params), params)
+            for function_config, optimizer_spec in product(
+                self.config.normalized_functions(),
+                self.config.normalized_optimizers(),
+            )
+            for params, tol in product(optimizer_spec.param_grid.combinations(), self.config.stopping_tolerances)
+        )
 
         if self.config.parallel:
             runs: list[ExperimentRun] = []
