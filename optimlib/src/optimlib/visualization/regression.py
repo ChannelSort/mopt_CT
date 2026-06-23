@@ -454,6 +454,10 @@ def plot_lab5_batch_size_comparison(
         final_loss = float(run.result.metadata.get("loss", run.result.f))
         grad_calls = max(1, int(run.result.n_grad_calls))
         processed = int(run.function_params.get("n_points", 0) or 0) * int(run.result.metadata.get("epochs", run.result.n_iter))
+        n_samples = int(run.function_params.get("n_points", 0) or 0)
+        gradient_noise_proxy = 1.0 / max(1, batch)
+        if n_samples > 1:
+            gradient_noise_proxy = max(0.0, (n_samples - batch) / (batch * (n_samples - 1)))
         summary_rows.append(
             {
                 "batch": batch,
@@ -462,6 +466,7 @@ def plot_lab5_batch_size_comparison(
                 "empirical_risk": _empirical_risk(run),
                 "n_grad_calls": grad_calls,
                 "processed_samples": processed,
+                "gradient_noise_proxy": gradient_noise_proxy,
                 "loss_reduction_per_1000_grad_calls": (first_loss - final_loss) / grad_calls * 1000.0,
                 "cost_adjusted_loss": final_loss * grad_calls / 1000.0,
             }
@@ -489,6 +494,66 @@ def plot_lab5_batch_size_comparison(
         plt.close(fig)
         paths["efficiency_csv"] = csv
         paths["efficiency"] = png
+
+        tradeoff = summary.sort_values("batch")
+        fig, ax = plt.subplots(figsize=(9.5, 6.0))
+        ax.plot(
+            tradeoff["batch"],
+            tradeoff["gradient_noise_proxy"],
+            color="#1f77b4",
+            linewidth=2.2,
+            marker="o",
+            markersize=6.5,
+        )
+        ax.fill_between(
+            tradeoff["batch"],
+            tradeoff["gradient_noise_proxy"],
+            np.zeros(len(tradeoff), dtype=np.float64),
+            color="#1f77b4",
+            alpha=0.12,
+        )
+        for _, row in tradeoff.iterrows():
+            ax.annotate(
+                f"b={row['batch_label']}\nL={float(row['final_loss']):.3g}",
+                (float(row["batch"]), float(row["gradient_noise_proxy"])),
+                textcoords="offset points",
+                xytext=(6, 7 if float(row["gradient_noise_proxy"]) < 0.8 else -26),
+                fontsize=8,
+            )
+        max_batch = float(tradeoff["batch"].max())
+        max_noise = float(tradeoff["gradient_noise_proxy"].max())
+        ax.annotate(
+            "SGD\ncheap update,\nhigh variance",
+            xy=(1.0, max_noise),
+            xytext=(2.1, 0.78),
+            arrowprops={"arrowstyle": "->", "linewidth": 1.0},
+            fontsize=9,
+        )
+        ax.annotate(
+            "mini-batch\ntrade-off zone",
+            xy=(16.0, float(tradeoff.loc[tradeoff["batch"] == 16, "gradient_noise_proxy"].iloc[0])),
+            xytext=(8.5, 0.38),
+            arrowprops={"arrowstyle": "->", "linewidth": 1.0},
+            fontsize=9,
+        )
+        ax.annotate(
+            "full batch\nexpensive update,\nzero sampling variance",
+            xy=(max_batch, 0.0),
+            xytext=(max_batch * 0.28, 0.18),
+            arrowprops={"arrowstyle": "->", "linewidth": 1.0},
+            fontsize=9,
+        )
+        ax.set_xscale("log", base=2)
+        ax.set_ylim(-0.04, 1.08)
+        ax.set_title("Batch size trade-off: update cost vs gradient variance")
+        ax.set_xlabel("batch size b (computational cost per update)")
+        ax.set_ylabel(r"gradient-noise proxy $\frac{m-b}{b(m-1)}$")
+        ax.grid(True, which="both", alpha=0.25)
+        plt.tight_layout()
+        tradeoff_png = output_dir / f"{basename}_tradeoff.png"
+        fig.savefig(tradeoff_png, dpi=300)
+        plt.close(fig)
+        paths["tradeoff"] = tradeoff_png
     return paths
 
 
@@ -532,6 +597,8 @@ def plot_lab5_regularization_comparison(
         fig.savefig(png, dpi=300)
         plt.close(fig)
         paths[metric] = png
+        if metric in {"l1_term", "l2_term"}:
+            continue
         families = ["none", "L1", "L2", "Elastic Net"]
         fig, axes = plt.subplots(2, 2, figsize=(13, 8.5), squeeze=False, sharex=False, sharey=True)
         for axis, family in zip(axes.ravel(), families, strict=True):
