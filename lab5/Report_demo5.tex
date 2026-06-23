@@ -249,38 +249,70 @@ Elastic Net, $\lambda=1$ & 0.93095 & 85\\
 
 \textbf{Промежуточный вывод.} Регуляризация увеличивает оптимизируемую функцию, потому что штраф входит прямо в значение $f$. Это не ошибка: смысл штрафа --- не уменьшить training loss любой ценой, а сдержать коэффициенты и сделать модель менее резкой.
 
+\subsection{Сравнение Gauss--Newton и Levenberg--Marquardt}
+
+Для отдельного сравнения взята нелинейная задача степени 5 без регуляризации и один регуляризованный случай Elastic Net. Gauss--Newton делает недемпфированный шаг по аппроксимации $J^TJ$, а Levenberg--Marquardt добавляет демпфирование и поэтому осторожнее реагирует на неудачную локальную модель.
+
+\tableplaceholder{../outputs/lab5/tables/gn_lm_comparison.tex}
+
+\textbf{Промежуточный вывод.} Gauss--Newton может быть быстрее, когда квадратичная аппроксимация остатков уже достаточно точна. Levenberg--Marquardt устойчивее за счет демпфирования: при неудачном шаге параметр $\mu$ увеличивается, а при успешном уменьшается. На регуляризованных постановках это особенно важно, потому что штраф меняет форму локальной модели.
+
+\subsection{Исследование batch size}
+
+\tableplaceholder{../outputs/lab5/tables/batch_size_summary.tex}
+
+\textbf{Промежуточный вывод.} Лучший batch выбирается по фактическим данным таблицы, а не только по гладкости линии. Строка \texttt{1 (SGD)} соответствует mini-batch запуску с batch size 1, то есть стохастическому обновлению по одному объекту. В этой серии он дает лучший итоговый $L(w)$, но платит самым большим числом градиентных вычислений. Batch 16 используется как базовый компромисс: он не самый шумный, но и не превращается в полный градиент. Полный batch $m=120$ обычно дает наиболее гладкую динамику, однако за ограниченное число эпох проигрывает по конечному loss.
+
 \section{Графики}
 
-\plotplaceholder{PolynomialRegressionObjective__dataset_kind_near_linear_degree_5_n_points_120_noise_variance_0.04_seed_11_x_range_-3.0_3.0_fit.png}{Аппроксимация почти линейных данных полиномом степени 5}
-\textit{Комментарий к графику.} Истинная зависимость почти линейна, поэтому высокая степень нужна мало. Если кривая почти совпадает с низкостепенной моделью, это говорит, что дополнительные коэффициенты в основном подстраивают мелкие колебания и шум.
+\subsection{Fit-графики базовых моделей}
 
-\plotplaceholder{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_5_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_fit.png}{Аппроксимация нелинейных данных полиномом степени 5}
-\textit{Комментарий к графику.} Нелинейный набор содержит пик и осцилляцию. Полином высокой степени лучше повторяет форму данных, но именно здесь возрастает риск лишней гибкости и становится полезной регуляризация.
+\plotplaceholder{PolynomialRegressionObjective__dataset_kind_near_linear_degree_1_n_points_120_noise_variance_0.04_seed_11_x_range_-3.0_3.0_fit.png}{Аппроксимация почти линейных данных моделью degree 1}
+\plotplaceholder{PolynomialRegressionObjective__dataset_kind_near_linear_degree_1_n_points_120_noise_variance_0.04_seed_11_x_range_-3.0_3.0_fit_panels.png}{Аппроксимация почти линейных данных degree 1 по отдельным методам}
+\plotplaceholder{PolynomialRegressionObjective__dataset_kind_near_linear_degree_5_n_points_120_noise_variance_0.04_seed_11_x_range_-3.0_3.0_fit.png}{Аппроксимация почти линейных данных моделью degree 5}
+\plotplaceholder{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_1_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_fit.png}{Аппроксимация нелинейных данных моделью degree 1}
+\plotplaceholder{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_5_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_fit.png}{Аппроксимация нелинейных данных моделью degree 5}
+\plotplaceholder{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_5_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_fit_panels.png}{Аппроксимация nonlinear degree 5 по отдельным методам}
 
-\twoplotplaceholder{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_5_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_history_loss.png}{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_5_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_history_loss_by_grad_calls.png}{История loss для nonlinear degree 5 по итерациям и по числу вычислений градиента}
-\textit{Комментарий к графикам.} Методы на всей выборке обычно дают более гладкую кривую loss, потому что используют полный градиент или якобиан. Ось по числу градиентных вычислений честнее показывает цену стохастических методов: SGD делает много дешевых обновлений, но путь к малой ошибке может быть дорогим.
+\tableplaceholder{../outputs/lab5/tables/fit_catalog.tex}
 
-\twoplotplaceholder{lab5_batch_size_comparison_by_epoch.png}{lab5_batch_size_comparison_by_grad_calls.png}{Влияние размера batch по эпохам и по числу вычислений градиента}
-\textit{Комментарий к графикам.} Малые батчи обновляют веса чаще и шумнее, крупные батчи ближе к полному градиенту. Сравнение по двум осям разделяет устойчивость траектории и фактическую вычислительную цену.
+\textit{Комментарий к каталогу.} Каждый fit-график содержит истинную зависимость, зашумленные точки и предсказания применимых методов для одной пары dataset--degree. Для аналитического решения строки есть только там, где оно применимо. Если метод технически неприменим к конкретной постановке, в полной таблице он отмечается статусом \texttt{not\_applicable}.
+
+\subsection{Динамика loss}
+
+\twoplotplaceholder{PolynomialRegressionObjective__dataset_kind_near_linear_degree_5_n_points_120_noise_variance_0.04_seed_11_x_range_-3.0_3.0_history_loss.png}{PolynomialRegressionObjective__dataset_kind_near_linear_degree_5_n_points_120_noise_variance_0.04_seed_11_x_range_-3.0_3.0_history_loss_by_grad_calls.png}{История полного objective $L(w)$ для near\_linear degree 5}
+\plotplaceholder{PolynomialRegressionObjective__dataset_kind_near_linear_degree_5_n_points_120_noise_variance_0.04_seed_11_x_range_-3.0_3.0_history_loss_panels.png}{История $L(w)$ для near\_linear degree 5 по отдельным методам}
+
+\twoplotplaceholder{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_5_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_history_loss.png}{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_5_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_history_loss_by_grad_calls.png}{История полного objective $L(w)$ для nonlinear degree 5}
+\plotplaceholder{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_5_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_history_loss_panels.png}{История $L(w)$ для nonlinear degree 5 по отдельным методам}
+\textit{Комментарий к графикам.} В легенде указаны итоговые $L(w)$, эмпирический риск $Q(w)$, число итераций/эпох и статус остановки. Для Gauss--Newton история иногда состоит из одной точки; маркер на графике показывает этот запуск даже тогда, когда линия визуально почти не видна. Если используется библиотечный или закрытый метод без истории, его нельзя было бы честно показать на history-графике; здесь Gauss--Newton реализован в проекте и история сохраняется.
+
+\twoplotplaceholder{lab5_batch_size_comparison_by_epoch.png}{lab5_batch_size_comparison_by_grad_calls.png}{Влияние размера batch по эпохам и по числу обновлений/градиентных вычислений}
+\plotplaceholder{lab5_batch_size_comparison_by_processed_samples.png}{Влияние размера batch по числу обработанных объектов}
+\plotplaceholder{lab5_batch_size_comparison_efficiency.png}{Итоговая точность и удельное улучшение для разных batch size}
+\textit{Комментарий к графикам.} Ось \texttt{gradient\_evaluations} сравнивает число обновлений/полных пересчетов градиента, но не полностью отражает стоимость batch разного размера: обновление на batch 1 дешевле, чем на batch 64. Поэтому дополнительно показана ось processed samples, которая учитывает объем просмотренных данных, и отдельный график удельного улучшения $L(w)$ на 1000 градиентных вычислений.
 
 \twoplotplaceholder{lab5_regularization_loss.png}{lab5_regularization_empirical_risk.png}{Полная функция потерь и эмпирический риск при разных регуляризациях}
 \textit{Комментарий к графикам.} При росте регуляризации модель жертвует точностью на обучающей выборке ради более сдержанных коэффициентов. Полная функция потерь может расти из-за штрафа, даже если эмпирический риск меняется умеренно.
 
 \twoplotplaceholder{lab5_regularization_l1_term.png}{lab5_regularization_l2_term.png}{L1- и L2-слагаемые при разных регуляризациях}
-\textit{Комментарий к графикам.} Эти графики показывают, какая часть оптимизируемой функции связана именно со штрафом. При сильных коэффициентах регуляризации штраф начинает доминировать и подавляет гибкость модели.
+\plotplaceholder{lab5_regularization_l1_term_panels.png}{L1-слагаемое по семействам регуляризации}
+\plotplaceholder{lab5_regularization_l2_term_panels.png}{L2-слагаемое по семействам регуляризации}
+\textit{Комментарий к графикам.} Эти графики показывают, какая часть оптимизируемой функции связана именно со штрафом. При сильных коэффициентах регуляризации штраф начинает доминировать и подавляет гибкость модели. Если линия обрывается раньше других, это не ошибка отрисовки: каждая траектория заканчивается на своей фактической остановке оптимизатора. Для LM это может быть достижение критерия по градиенту, малый шаг или лимит итераций.
 
 \plotplaceholder{lab5_regularization_fit.png}{Аппроксимация nonlinear degree 5 до и после регуляризации}
+\plotplaceholder{lab5_regularization_fit_panels.png}{Аппроксимация nonlinear degree 5 до и после регуляризации по отдельным вариантам}
 \textit{Комментарий к графику.} Нерегуляризованная кривая сильнее подстраивается под обучающие точки, а регуляризованные варианты становятся более сглаженными. На этом графике виден практический смысл штрафа: он меняет форму модели, а не только значение целевой функции.
 
 \plotplaceholder{lab5_regularized_coefficients.png}{Коэффициенты при регуляризации}
-\textit{Комментарий к графику.} L1 стремится занулять менее важные коэффициенты, L2 уменьшает их более плавно, а Elastic Net сочетает оба эффекта. По столбцам коэффициентов видно, как штраф меняет саму модель, а не только итоговый loss.
+\textit{Комментарий к графику.} L1 сильнее зануляет или уменьшает отдельные коэффициенты, L2 сглаживает веса более равномерно, а Elastic Net сочетает оба эффекта. Слишком большая регуляризация ухудшает эмпирический риск, потому что модель становится недостаточно гибкой для нелинейной зависимости.
 
 \twoplotplaceholder{lab5_method_comparison_loss.png}{lab5_method_comparison_elapsed_seconds.png}{Сравнение методов по итоговой функции потерь и среднему времени работы}
-\textit{Комментарий к графикам.} Методы Гаусса--Ньютона и Левенберга--Марквардта выигрывают там, где структура суммы квадратов хорошо описывает задачу. Время работы дополняет счетчики итераций и градиентов: метод с малым числом эпох не обязательно оказывается самым дешевым по фактическому времени.
+\textit{Комментарий к графикам.} Методы Гаусса--Ньютона и Левенберга--Марквардта выигрывают там, где структура суммы квадратов хорошо описывает задачу. Для \texttt{elapsed\_seconds} используется логарифмическая шкала, потому что времена методов отличаются на порядки. Время работы дополняет счетчики итераций и градиентов: метод с малым числом эпох не обязательно оказывается самым дешевым по фактическому времени.
 
 \section{Полная таблица экспериментов}
 
-Полная сводка 264 запусков хранится в \path{../outputs/lab5/tables/summary.csv}. Ниже приведена печатная версия таблицы, разбитая на масштабируемые блоки. Дополнительные CSV с историями, коэффициентами и данными сохранены в той же папке. Строки со статусом \texttt{skipped\_batch\_study} являются техническим фильтром для отдельного исследования batch size: они не означают неудачное обучение, а показывают, что соответствующая комбинация не входила в этот подэксперимент.
+Полная сводка 264 запусков хранится в \path{../outputs/lab5/tables/summary.csv}. Ниже приведена печатная версия таблицы, разбитая на масштабируемые блоки. Дополнительные CSV с историями, коэффициентами и данными сохранены в той же папке. Строки со статусом \texttt{skipped\_batch\_study} являются техническим фильтром для отдельного исследования batch size: они не означают неудачное обучение, а показывают, что соответствующая комбинация не входила в этот подэксперимент. Статусы \texttt{max\_epochs} и \texttt{max\_iter} означают, что строгий критерий остановки не был достигнут за лимит эпох или итераций, даже если итоговый loss уже стал приемлемым.
 
 \tableplaceholder{../outputs/lab5/tables/summary_report_scaled.tex}
 

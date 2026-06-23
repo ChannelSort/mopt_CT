@@ -28,8 +28,10 @@ from optimlib.visualization.regression import (  # noqa: E402
     plot_lab5_coefficients,
     plot_lab5_loss_by_gradient_calls,
     plot_lab5_loss_history,
+    plot_lab5_loss_history_panels,
     plot_lab5_method_comparison,
     plot_lab5_regression_fit,
+    plot_lab5_regression_fit_panels,
     plot_lab5_regularization_comparison,
     save_lab5_report_tables,
 )
@@ -213,7 +215,9 @@ def main() -> None:
             ]
             if family:
                 stem = _variant_basename(function_config.name, dict(function_config.params))
-                plot_paths.update(plot_lab5_regression_fit(func, _best_runs_per_optimizer(family), plot_dir, f"{stem}_fit"))
+                best = _best_runs_per_optimizer(family)
+                plot_paths.update(plot_lab5_regression_fit(func, best, plot_dir, f"{stem}_fit"))
+                plot_paths.update(plot_lab5_regression_fit_panels(func, best, plot_dir, f"{stem}_fit"))
 
     history_names = plots.get("history_optimizers", [])
     history_filter = {str(name) for name in history_names} if isinstance(history_names, list) else set[str]()
@@ -235,6 +239,7 @@ def main() -> None:
         if bool(plots.get("histories", True)):
             plot_paths.update(plot_lab5_loss_history(best, plot_dir, f"{stem}_history"))
             plot_paths.update(plot_lab5_loss_by_gradient_calls(best, plot_dir, f"{stem}_history"))
+            plot_paths.update(plot_lab5_loss_history_panels(best, plot_dir, f"{stem}_history"))
         if bool(plots.get("coefficients", True)):
             plot_paths.update(plot_lab5_coefficients(best, plot_dir, f"{stem}_coefficients"))
 
@@ -242,6 +247,7 @@ def main() -> None:
         run
         for run in runs
         if run.optimizer_name == "MiniBatchGradientDescent"
+        and "batch_size" in run.params
         and _match_params(run, dataset_kind="nonlinear", degree=5)
         and _is_unregularized(run)
         and _is_meaningful_run(run)
@@ -271,12 +277,13 @@ def main() -> None:
         fit_runs = _regularization_fit_runs(regularized_runs)
         if func is not None and fit_runs:
             plot_paths.update(plot_lab5_regression_fit(func, fit_runs, plot_dir, "lab5_regularization_fit"))
+            plot_paths.update(plot_lab5_regression_fit_panels(func, fit_runs, plot_dir, "lab5_regularization_fit"))
 
     if bool(plots.get("method_comparison", True)):
         comparison_runs = [run for run in runs if _is_unregularized(run) and _is_meaningful_run(run)]
         plot_paths.update(plot_lab5_method_comparison(comparison_runs, plot_dir))
 
-    table_paths.update(save_lab5_report_tables(runs, experiment.config.output_dir / "tables"))
+    table_paths.update(save_lab5_report_tables(runs, experiment.config.output_dir / "tables", plot_dir))
     print(f"Lab 5 completed: {len(runs)} runs")
     for name, path in table_paths.items():
         print(f"{name}: {path}")

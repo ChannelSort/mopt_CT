@@ -23,9 +23,6 @@ from optimlib.utils.registry import GLOBAL_REGISTRY  # noqa: E402
 from optimlib.visualization.lab4 import (  # noqa: E402
     plot_lab4_grouped_trajectories,
     plot_lab4_lbfgs_memory,
-    plot_lab4_metric_dependencies,
-    plot_lab4_metric_tables,
-    plot_lab4_optimizer_comparison,
     save_lab4_report_tables,
 )
 
@@ -36,13 +33,6 @@ def _variant_basename(function_name: str, function_params: dict[str, Any]) -> st
     compact = json.dumps(function_params, sort_keys=True, separators=(",", ":"))
     safe = re.sub(r"[^0-9A-Za-z_.-]+", "_", compact)
     return f"{function_name}_{safe}"
-
-
-def _plot_metrics(plots: dict[str, Any]) -> list[str]:
-    values = plots.get("metrics", ["n_iter", "n_calls", "n_grad_calls", "n_hessian_calls"])
-    if not isinstance(values, list):
-        return ["n_iter", "n_calls", "n_grad_calls", "n_hessian_calls"]
-    return [str(value) for value in values]
 
 
 def _matching_target_runs(runs: list[ExperimentRun], target: object) -> list[ExperimentRun]:
@@ -63,16 +53,8 @@ def main() -> None:
     runs = experiment.execute()
     plot_dir = experiment.config.output_dir / "plots"
     plots = experiment.config.plots
-    metrics = _plot_metrics(plots)
     plot_paths: dict[str, Path] = {}
 
-    quadratic_runs = [run for run in runs if run.function_name == "GeneratedQuadratic"]
-    if bool(plots.get("tables", True)):
-        plot_paths.update(plot_lab4_metric_tables(quadratic_runs, plot_dir, metrics))
-    if bool(plots.get("dependencies", True)):
-        plot_paths.update(plot_lab4_metric_dependencies(quadratic_runs, plot_dir, metrics, fixed_k=10.0, fixed_n=10))
-    if bool(plots.get("comparison", True)):
-        plot_paths.update(plot_lab4_optimizer_comparison(quadratic_runs, plot_dir, metrics))
     if bool(plots.get("lbfgs_memory", True)):
         lbfgs_runs = _matching_target_runs(runs, plots.get("lbfgs_memory_function"))
         plot_paths.update(plot_lab4_lbfgs_memory(lbfgs_runs, plot_dir, "n_iter"))

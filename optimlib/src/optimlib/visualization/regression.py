@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Protocol, Sequence, runtime_checkable
@@ -33,6 +34,14 @@ LAB5_LINE_COLORS: tuple[str, ...] = (
     "#6b6ecf",
     "#f7b6d2",
 )
+
+METRIC_LABELS: dict[str, str] = {
+    "loss": r"full objective $L(w)$",
+    "empirical_risk": r"empirical risk $Q(w)$",
+    "l1_term": r"L1 regularization term",
+    "l2_term": r"L2 regularization term",
+    "elapsed_seconds": "elapsed seconds",
+}
 
 
 @runtime_checkable
@@ -118,15 +127,88 @@ def _regularization_label(params: Mapping[str, Any], *, include_none: bool = Fal
     return f"L2={_format_float(l2)}"
 
 
-def _run_label(run: ExperimentRun, *, include_regularization: bool = True) -> str:
+def _regularization_family(params: Mapping[str, Any]) -> str:
+    l1 = float(params.get("lambda_l1", 0.0) or 0.0)
+    l2 = float(params.get("lambda_l2", 0.0) or 0.0)
+    if l1 == 0.0 and l2 == 0.0:
+        return "none"
+    if l1 != 0.0 and l2 != 0.0:
+        return "Elastic Net"
+    if l1 != 0.0:
+        return "L1"
+    return "L2"
+
+
+def _batch_label(value: object) -> str:
+    try:
+        batch = int(float(value))
+    except (TypeError, ValueError):
+        return str(value)
+    if batch == 1:
+        return "1 (SGD)"
+    if batch == 120:
+        return "120 (full)"
+    return str(batch)
+
+
+def _short_stop(run: ExperimentRun) -> str:
+    if run.result is None:
+        return "error"
+    message = run.result.message.lower()
+    if "mini_batch_study_not_applicable" in message:
+        return "skipped_batch_study"
+    if "analytical_solution_not_applicable" in message:
+        return "not_applicable"
+    if "maximum epochs" in message:
+        return "max_epochs"
+    if "maximum iterations" in message:
+        return "max_iter"
+    if "gradient norm" in message:
+        return "grad_tol"
+    if "step tolerance" in message:
+        return "step_tol"
+    if "lm_damping_max_reached" in message:
+        return "lm_damping_max"
+    if run.result.converged:
+        return "converged"
+    return "stopped"
+
+
+def _empirical_risk(run: ExperimentRun) -> float | None:
+    if run.result is None:
+        return None
+    value = run.result.metadata.get("empirical_risk")
+    if isinstance(value, int | float):
+        return float(value)
+    if run.result.history:
+        history_value = run.result.history[-1].extra_metrics.get("empirical_risk")
+        if isinstance(history_value, int | float):
+            return float(history_value)
+    return None
+
+
+def _run_label(run: ExperimentRun, *, include_regularization: bool = True, include_stats: bool = False) -> str:
     label = _optimizer_label(run.optimizer_name)
     if run.optimizer_name == "MiniBatchGradientDescent" and "batch_size" in run.params:
-        label = f"{label} b={run.params['batch_size']}"
+        batch = int(run.params["batch_size"])
+        label = f"SGD-style b=1" if batch == 1 else f"{label} b={batch}"
     if include_regularization:
         reg = _regularization_label(run.function_params)
         if reg:
             label = f"{label}, {reg}"
+    if include_stats and run.result is not None:
+        risk = _empirical_risk(run)
+        label = (
+            f"{label}; L={_format_float(run.result.f)}, "
+            f"Q={_format_float(risk)}, iter={run.result.n_iter}, {_short_stop(run)}"
+        )
     return label
+
+
+def _subplot_grid(count: int, *, max_cols: int = 3) -> tuple[int, int]:
+    cols = min(max_cols, max(1, count))
+    rows = int(np.ceil(count / cols))
+    return rows, cols
 
 
 def _palette_for(data: pd.DataFrame, column: str) -> dict[object, str]:
@@ -139,19 +221,27 @@ def _history_dataframe(results: list[ExperimentRun]) -> pd.DataFrame:
     for run in results:
         if run.result is None:
             continue
+        n_points = int(run.function_params.get("n_points", 0) or 0)
         for state in run.result.history:
+            epoch = state.extra_metrics.get("epoch", state.iteration)
             row: dict[str, object] = {
                 "optimizer": run.optimizer_name,
                 "params": str(run.params),
-                "label": _run_label(run),
+                "label": _run_label(run, include_stats=True),
                 "regularization": _regularization_label(run.function_params, include_none=True),
                 "iteration": state.iteration,
                 "f": state.f,
                 "grad_norm": np.nan if state.grad is None else float(np.linalg.norm(state.grad)),
+                "processed_samples": int(epoch) * n_points if isinstance(epoch, int | float) and n_points > 0 else np.nan,
             }
             row.update({key: value for key, value in state.extra_metrics.items() if isinstance(value, int | float | str | bool)})
             rows.append(row)
     return pd.DataFrame(rows)
+
+
+def _draw_regression_background(ax: plt.Axes, func: RegressionPlotFunction) -> None:
+    ax.scatter(func.dataset.x, func.dataset.y, s=10, alpha=0.28, color="#4C78A8", label="noisy data")
+    ax.plot(func.dataset.x, func.dataset.y_true, color="black", linewidth=1.8, label="true relation")
 
 
 def plot_lab5_regression_fit(
@@ -166,14 +256,13 @@ def plot_lab5_regression_fit(
         return {}
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.set_prop_cycle(color=LAB5_LINE_COLORS)
-    ax.scatter(func.dataset.x, func.dataset.y, s=14, alpha=0.55, label="noisy data")
-    ax.plot(func.dataset.x, func.dataset.y_true, color="black", linewidth=2.0, label="true relation")
+    _draw_regression_background(ax, func)
     for run in results:
         weights = result_weights(run)
         if weights is None:
             continue
         table = func.dense_prediction_table(weights)
-        label = _run_label(run)
+        label = _run_label(run, include_stats=True)
         ax.plot(table["x"], table["y_pred"], linewidth=1.4, label=label)
     meta = _function_metadata(func)
     ax.set_title(f"{meta.get('dataset_kind', func.name)} degree={meta.get('degree', '?')} regression")
@@ -186,6 +275,45 @@ def plot_lab5_regression_fit(
     fig.savefig(png, dpi=300)
     plt.close(fig)
     return {"png": png}
+
+
+def plot_lab5_regression_fit_panels(
+    func: MultivariateFunction,
+    results: list[ExperimentRun],
+    output_dir: Path,
+    basename: str,
+) -> dict[str, Path]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    if not isinstance(func, RegressionPlotFunction):
+        return {}
+    selected = [run for run in results if result_weights(run) is not None]
+    if not selected:
+        return {}
+    rows, cols = _subplot_grid(len(selected), max_cols=3)
+    fig, axes = plt.subplots(rows, cols, figsize=(5.4 * cols, 3.8 * rows), squeeze=False, sharex=True, sharey=True)
+    for index, ax in enumerate(axes.ravel()):
+        if index >= len(selected):
+            ax.axis("off")
+            continue
+        run = selected[index]
+        weights = result_weights(run)
+        assert weights is not None
+        table = func.dense_prediction_table(weights)
+        _draw_regression_background(ax, func)
+        ax.plot(table["x"], table["y_pred"], linewidth=2.0, color="#D55E00", label="prediction")
+        ax.set_title(_run_label(run, include_stats=True), fontsize=9)
+        ax.grid(True, alpha=0.22)
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        ax.legend(fontsize=7, loc="best")
+    meta = _function_metadata(func)
+    fig.suptitle(f"{meta.get('dataset_kind', func.name)} degree={meta.get('degree', '?')}: fits by method", y=0.995)
+    plt.tight_layout(rect=(0, 0, 1, 0.98))
+    suffix = "panels" if basename.endswith("_fit") else "fit_panels"
+    png = output_dir / f"{basename}_{suffix}.png"
+    fig.savefig(png, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    return {"panels": png}
 
 
 def plot_lab5_loss_history(
@@ -204,11 +332,14 @@ def plot_lab5_loss_history(
         if metric not in data:
             continue
         fig, ax = plt.subplots(figsize=(10, 6))
-        sns.lineplot(data=data, x="iteration", y=metric, hue="label", palette=_palette_for(data, "label"), errorbar=None, ax=ax)
+        sns.lineplot(data=data, x="iteration", y=metric, hue="label", palette=_palette_for(data, "label"), marker=None, errorbar=None, ax=ax)
+        final_points = data.sort_values("iteration").groupby("label", as_index=False).tail(1)
+        sns.scatterplot(data=final_points, x="iteration", y=metric, hue="label", palette=_palette_for(data, "label"), legend=False, s=36, ax=ax)
         set_log_scale_if_positive(ax, data, metric)
-        ax.set_title(f"{metric} history")
+        label = METRIC_LABELS.get(metric, metric)
+        ax.set_title(f"{label} history")
         ax.set_xlabel("epoch / iteration")
-        ax.set_ylabel(metric)
+        ax.set_ylabel(label)
         ax.grid(True, which="both", alpha=0.25)
         ax.legend(fontsize=7)
         plt.tight_layout()
@@ -217,6 +348,41 @@ def plot_lab5_loss_history(
         plt.close(fig)
         paths[metric] = png
     return paths
+
+
+def plot_lab5_loss_history_panels(
+    results: list[ExperimentRun],
+    output_dir: Path,
+    basename: str,
+    metric: str = "loss",
+) -> dict[str, Path]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    data = _history_dataframe(results)
+    if data.empty or metric not in data:
+        return {}
+    labels = list(data["label"].dropna().unique())
+    rows, cols = _subplot_grid(len(labels), max_cols=2)
+    fig, axes = plt.subplots(rows, cols, figsize=(6.2 * cols, 3.8 * rows), squeeze=False, sharex=False, sharey=True)
+    for index, ax in enumerate(axes.ravel()):
+        if index >= len(labels):
+            ax.axis("off")
+            continue
+        label_value = labels[index]
+        subset = data[data["label"] == label_value]
+        ax.plot(subset["iteration"], subset[metric], marker="o" if len(subset) <= 4 else None, linewidth=2.0)
+        if len(subset) > 4:
+            last = subset.sort_values("iteration").tail(1)
+            ax.scatter(last["iteration"], last[metric], s=40, color="#D55E00")
+        set_log_scale_if_positive(ax, subset, metric)
+        ax.set_title(str(label_value), fontsize=9)
+        ax.set_xlabel("epoch / iteration")
+        ax.set_ylabel(METRIC_LABELS.get(metric, metric))
+        ax.grid(True, which="both", alpha=0.25)
+    plt.tight_layout()
+    png = output_dir / f"{basename}_{safe_stem(metric)}_panels.png"
+    fig.savefig(png, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    return {metric: png}
 
 
 def plot_lab5_loss_by_gradient_calls(
@@ -231,11 +397,14 @@ def plot_lab5_loss_by_gradient_calls(
     if data.empty or metric not in data or "gradient_evaluations" not in data:
         return {}
     fig, ax = plt.subplots(figsize=(10, 6))
-    sns.lineplot(data=data, x="gradient_evaluations", y=metric, hue="label", palette=_palette_for(data, "label"), errorbar=None, ax=ax)
+    sns.lineplot(data=data, x="gradient_evaluations", y=metric, hue="label", palette=_palette_for(data, "label"), marker=None, errorbar=None, ax=ax)
+    final_points = data.sort_values("gradient_evaluations").groupby("label", as_index=False).tail(1)
+    sns.scatterplot(data=final_points, x="gradient_evaluations", y=metric, hue="label", palette=_palette_for(data, "label"), legend=False, s=36, ax=ax)
     set_log_scale_if_positive(ax, data, metric)
-    ax.set_title(f"{metric} by gradient evaluations")
-    ax.set_xlabel("gradient evaluations")
-    ax.set_ylabel(metric)
+    label = METRIC_LABELS.get(metric, metric)
+    ax.set_title(f"{label} by gradient evaluations")
+    ax.set_xlabel("gradient evaluations / optimizer updates")
+    ax.set_ylabel(label)
     ax.grid(True, which="both", alpha=0.25)
     ax.legend(fontsize=7)
     plt.tight_layout()
@@ -252,19 +421,23 @@ def plot_lab5_batch_size_comparison(
 ) -> dict[str, Path]:
     """Compare mini-batch loss histories by batch size."""
     output_dir.mkdir(parents=True, exist_ok=True)
-    data = _history_dataframe([run for run in results if run.optimizer_name == "MiniBatchGradientDescent"])
+    selected_runs = [run for run in results if run.optimizer_name == "MiniBatchGradientDescent" and "batch_size" in run.params]
+    data = _history_dataframe(selected_runs)
     if data.empty or "batch_size" not in data or "loss" not in data:
         return {}
+    data["batch_label"] = data["batch_size"].map(_batch_label)
     paths: dict[str, Path] = {}
-    for x_axis, suffix in (("epoch", "by_epoch"), ("gradient_evaluations", "by_grad_calls")):
+    for x_axis, suffix in (("epoch", "by_epoch"), ("gradient_evaluations", "by_grad_calls"), ("processed_samples", "by_processed_samples")):
         if x_axis not in data:
             continue
         fig, ax = plt.subplots(figsize=(10, 6))
-        sns.lineplot(data=data, x=x_axis, y="loss", hue="batch_size", palette=_palette_for(data, "batch_size"), errorbar=None, ax=ax)
+        sns.lineplot(data=data, x=x_axis, y="loss", hue="batch_label", palette=_palette_for(data, "batch_label"), marker=None, linewidth=2.0, alpha=0.9, errorbar=None, ax=ax)
+        final_points = data.sort_values(x_axis).groupby("batch_label", as_index=False).tail(1)
+        sns.scatterplot(data=final_points, x=x_axis, y="loss", hue="batch_label", palette=_palette_for(data, "batch_label"), legend=False, s=32, ax=ax)
         set_log_scale_if_positive(ax, data, "loss")
-        ax.set_title(f"Mini-batch loss {suffix.replace('_', ' ')}")
+        ax.set_title(f"Mini-batch full objective L(w) {suffix.replace('_', ' ')}")
         ax.set_xlabel(x_axis)
-        ax.set_ylabel("loss")
+        ax.set_ylabel(METRIC_LABELS["loss"])
         ax.grid(True, which="both", alpha=0.25)
         ax.legend(fontsize=7)
         plt.tight_layout()
@@ -272,6 +445,50 @@ def plot_lab5_batch_size_comparison(
         fig.savefig(png, dpi=300)
         plt.close(fig)
         paths[suffix] = png
+    summary_rows: list[dict[str, object]] = []
+    for run in selected_runs:
+        if run.result is None or not run.result.history:
+            continue
+        batch = int(run.params.get("batch_size", run.result.metadata.get("batch_size", 0)))
+        first_loss = float(run.result.history[0].extra_metrics.get("loss", run.result.history[0].f))
+        final_loss = float(run.result.metadata.get("loss", run.result.f))
+        grad_calls = max(1, int(run.result.n_grad_calls))
+        processed = int(run.function_params.get("n_points", 0) or 0) * int(run.result.metadata.get("epochs", run.result.n_iter))
+        summary_rows.append(
+            {
+                "batch": batch,
+                "batch_label": _batch_label(batch),
+                "final_loss": final_loss,
+                "empirical_risk": _empirical_risk(run),
+                "n_grad_calls": grad_calls,
+                "processed_samples": processed,
+                "loss_reduction_per_1000_grad_calls": (first_loss - final_loss) / grad_calls * 1000.0,
+                "cost_adjusted_loss": final_loss * grad_calls / 1000.0,
+            }
+        )
+    summary = pd.DataFrame(summary_rows)
+    if not summary.empty:
+        csv = output_dir / f"{basename}_efficiency.csv"
+        summary.sort_values("batch").to_csv(csv, index=False)
+        fig, axes = plt.subplots(1, 2, figsize=(13.2, 5.0))
+        sns.barplot(data=summary, x="batch_label", y="final_loss", hue="batch_label", palette=_palette_for(summary, "batch_label"), legend=False, ax=axes[0])
+        axes[0].set_title("Final full objective L(w), lower is better")
+        axes[0].set_xlabel("batch")
+        axes[0].set_ylabel(METRIC_LABELS["loss"])
+        axes[0].tick_params(axis="x", rotation=25)
+        axes[0].grid(True, axis="y", alpha=0.25)
+        sns.barplot(data=summary, x="batch_label", y="loss_reduction_per_1000_grad_calls", hue="batch_label", palette=_palette_for(summary, "batch_label"), legend=False, ax=axes[1])
+        axes[1].set_title("Loss reduction per 1000 gradient calls, higher is better")
+        axes[1].set_xlabel("batch")
+        axes[1].set_ylabel(r"$\Delta L$ / 1000 grad calls")
+        axes[1].tick_params(axis="x", rotation=25)
+        axes[1].grid(True, axis="y", alpha=0.25)
+        plt.tight_layout()
+        png = output_dir / f"{basename}_efficiency.png"
+        fig.savefig(png, dpi=300)
+        plt.close(fig)
+        paths["efficiency_csv"] = csv
+        paths["efficiency"] = png
     return paths
 
 
@@ -290,19 +507,24 @@ def plot_lab5_regularization_comparison(
         if metric not in data:
             continue
         fig, ax = plt.subplots(figsize=(10, 6))
+        data["regularization_panel"] = data["regularization"].map(lambda value: value.split("=")[0] if isinstance(value, str) and value != "none" else value)
         sns.lineplot(
             data=data,
             x="iteration",
             y=metric,
             hue="regularization",
             palette=_palette_for(data, "regularization"),
+            marker=None,
             errorbar=None,
             ax=ax,
         )
+        final_points = data.sort_values("iteration").groupby("regularization", as_index=False).tail(1)
+        sns.scatterplot(data=final_points, x="iteration", y=metric, hue="regularization", palette=_palette_for(data, "regularization"), legend=False, s=30, ax=ax)
         set_log_scale_if_positive(ax, data, metric)
-        ax.set_title(f"Regularization comparison: {metric}")
+        label = METRIC_LABELS.get(metric, metric)
+        ax.set_title(f"Regularization comparison: {label}")
         ax.set_xlabel("epoch / iteration")
-        ax.set_ylabel(metric)
+        ax.set_ylabel(label)
         ax.grid(True, which="both", alpha=0.25)
         ax.legend(fontsize=7)
         plt.tight_layout()
@@ -310,6 +532,30 @@ def plot_lab5_regularization_comparison(
         fig.savefig(png, dpi=300)
         plt.close(fig)
         paths[metric] = png
+        families = ["none", "L1", "L2", "Elastic Net"]
+        fig, axes = plt.subplots(2, 2, figsize=(13, 8.5), squeeze=False, sharex=False, sharey=True)
+        for axis, family in zip(axes.ravel(), families, strict=True):
+            if family == "none":
+                subset = data[data["regularization"] == "none"]
+            else:
+                subset = data[data["regularization"].astype(str).str.startswith(family)]
+            if subset.empty:
+                axis.axis("off")
+                continue
+            sns.lineplot(data=subset, x="iteration", y=metric, hue="regularization", palette=_palette_for(subset, "regularization"), marker=None, errorbar=None, ax=axis)
+            family_final = subset.sort_values("iteration").groupby("regularization", as_index=False).tail(1)
+            sns.scatterplot(data=family_final, x="iteration", y=metric, hue="regularization", palette=_palette_for(subset, "regularization"), legend=False, s=28, ax=axis)
+            set_log_scale_if_positive(axis, subset, metric)
+            axis.set_title(family)
+            axis.set_xlabel("epoch / iteration")
+            axis.set_ylabel(label)
+            axis.grid(True, which="both", alpha=0.25)
+            axis.legend(fontsize=7)
+        plt.tight_layout()
+        panel_png = output_dir / f"{basename}_{safe_stem(metric)}_panels.png"
+        fig.savefig(panel_png, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+        paths[f"{metric}_panels"] = panel_png
     return paths
 
 
@@ -325,7 +571,7 @@ def plot_lab5_coefficients(
         weights = result_weights(run)
         if weights is None:
             continue
-        label = _run_label(run)
+        label = _run_label(run, include_stats=True)
         for index, value in enumerate(weights):
             rows.append({"run": label, "coefficient": f"w{index}", "value": float(value)})
     if not rows:
@@ -386,6 +632,11 @@ def plot_lab5_method_comparison(
         )
         ax.set_title(f"Method comparison: {metric}")
         ax.tick_params(axis="x", rotation=35)
+        if metric == "elapsed_seconds":
+            positive = data[metric][data[metric] > 0]
+            if not positive.empty:
+                ax.set_yscale("log")
+                ax.set_ylabel("elapsed seconds, log scale")
         ax.grid(True, axis="y", alpha=0.25)
         plt.tight_layout()
         png = output_dir / f"{basename}_{safe_stem(metric)}.png"
@@ -395,40 +646,6 @@ def plot_lab5_method_comparison(
     return paths
 
 
-def _empirical_risk(run: ExperimentRun) -> float | None:
-    if run.result is None:
-        return None
-    value = run.result.metadata.get("empirical_risk")
-    if isinstance(value, int | float):
-        return float(value)
-    if run.result.history:
-        history_value = run.result.history[-1].extra_metrics.get("empirical_risk")
-        if isinstance(history_value, int | float):
-            return float(history_value)
-    return None
-
-
-def _short_stop(run: ExperimentRun) -> str:
-    if run.result is None:
-        return "error"
-    message = run.result.message.lower()
-    if "mini_batch_study_not_applicable" in message:
-        return "skipped_batch_study"
-    if "analytical_solution_not_applicable" in message:
-        return "not_applicable"
-    if "maximum epochs" in message:
-        return "max_epochs"
-    if "maximum iterations" in message:
-        return "max_iter"
-    if "gradient norm" in message:
-        return "grad_tol"
-    if "step tolerance" in message:
-        return "step_tol"
-    if run.result.converged:
-        return "converged"
-    return "stopped"
-
-
 def _dataset_label(run: ExperimentRun) -> str:
     dataset = run.function_params.get("dataset_kind", "--")
     n_points = run.function_params.get("n_points", "--")
@@ -436,10 +653,11 @@ def _dataset_label(run: ExperimentRun) -> str:
     return f"{dataset}, m={n_points}, noise={noise}"
 
 
-def save_lab5_report_tables(runs: list[ExperimentRun], output_dir: Path, block_size: int = 34) -> dict[str, Path]:
+def save_lab5_report_tables(runs: list[ExperimentRun], output_dir: Path, plot_dir: Path | None = None, block_size: int = 34) -> dict[str, Path]:
     """Save compact LaTeX tables used by the Lab 5 report."""
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / "summary_report_scaled.tex"
+    paths: dict[str, Path] = {}
     sorted_runs = sorted(
         runs,
         key=lambda run: (
@@ -489,4 +707,154 @@ def save_lab5_report_tables(runs: list[ExperimentRun], output_dir: Path, block_s
         lines.extend([r"\bottomrule", r"\end{tabular}%", r"}", r"\end{table}", ""])
     lines.append(r"\endgroup")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return {"summary_report_scaled": path}
+    paths["summary_report_scaled"] = path
+    paths["fit_catalog"] = _save_fit_catalog(runs, output_dir / "fit_catalog.tex", plot_dir)
+    paths["gn_lm_comparison"] = _save_gn_lm_comparison(runs, output_dir / "gn_lm_comparison.tex")
+    paths["batch_size_summary"] = _save_batch_size_summary(runs, output_dir / "batch_size_summary.tex")
+    return paths
+
+
+def _fit_plot_name(run: ExperimentRun) -> str:
+    compact = json.dumps(run.function_params, sort_keys=True, separators=(",", ":"), default=str)
+    return f"{safe_stem(f'PolynomialRegressionObjective_{compact}')}_fit.png"
+
+
+def _save_fit_catalog(runs: list[ExperimentRun], path: Path, plot_dir: Path | None) -> Path:
+    selected = [
+        run
+        for run in runs
+        if run.result is not None
+        and float(run.function_params.get("lambda_l1", 0.0) or 0.0) == 0.0
+        and float(run.function_params.get("lambda_l2", 0.0) or 0.0) == 0.0
+        and "not_applicable" not in run.result.message.lower()
+    ]
+    lines = [
+        r"\begingroup",
+        r"\scriptsize",
+        r"\setlength{\tabcolsep}{2.4pt}",
+        r"\begin{table}[H]",
+        r"\centering",
+        r"\caption{Каталог fit-графиков без регуляризации}",
+        r"\fitreporttable{%",
+        r"\begin{tabular}{lllrll}",
+        r"\toprule",
+        r"dataset & degree & method & final $L$ & status & plot\\",
+        r"\midrule",
+    ]
+    for run in sorted(selected, key=lambda item: (str(item.function_params.get("dataset_kind")), int(item.function_params.get("degree", 0)), item.optimizer_name)):
+        result = run.result
+        assert result is not None
+        plot_name = _fit_plot_name(run)
+        plot_path = f"../outputs/lab5/plots/{plot_name}" if plot_dir is not None else plot_name
+        lines.append(
+            " & ".join(
+                [
+                    _latex_escape(run.function_params.get("dataset_kind")),
+                    str(run.function_params.get("degree")),
+                    _latex_escape(_optimizer_label(run.optimizer_name)),
+                    _format_float(result.f),
+                    _latex_escape(_short_stop(run)),
+                    _latex_escape(plot_path),
+                ]
+            )
+            + r"\\"
+        )
+    lines.extend([r"\bottomrule", r"\end{tabular}%", r"}", r"\end{table}", r"\endgroup"])
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def _save_gn_lm_comparison(runs: list[ExperimentRun], path: Path) -> Path:
+    selected = [
+        run
+        for run in runs
+        if run.optimizer_name in {"GaussNewton", "LevenbergMarquardt"}
+        and run.result is not None
+        and run.function_params.get("dataset_kind") == "nonlinear"
+        and int(run.function_params.get("degree", 0) or 0) == 5
+        and (
+            (float(run.function_params.get("lambda_l1", 0.0) or 0.0) == 0.0 and float(run.function_params.get("lambda_l2", 0.0) or 0.0) == 0.0)
+            or (float(run.function_params.get("lambda_l1", 0.0) or 0.0) == 0.01 and float(run.function_params.get("lambda_l2", 0.0) or 0.0) == 0.01)
+        )
+    ]
+    lines = [
+        r"\begin{table}[H]",
+        r"\centering",
+        r"\caption{Сравнение Gauss--Newton и Levenberg--Marquardt}",
+        r"\fitreporttable{%",
+        r"\begin{tabular}{lllrrrrrl}",
+        r"\toprule",
+        r"dataset & Reg & Method & $L$ & $Q$ & iter & $N_f$ & $N_g$ & status\\",
+        r"\midrule",
+    ]
+    for run in sorted(selected, key=lambda item: (_regularization_label(item.function_params, include_none=True), item.optimizer_name)):
+        result = run.result
+        assert result is not None
+        lines.append(
+            " & ".join(
+                [
+                    _latex_escape(run.function_params.get("dataset_kind")),
+                    _latex_escape(_regularization_label(run.function_params, include_none=True)),
+                    _latex_escape(_optimizer_label(run.optimizer_name)),
+                    _format_float(result.f),
+                    _format_float(_empirical_risk(run)),
+                    str(result.n_iter),
+                    str(result.n_calls),
+                    str(result.n_grad_calls),
+                    _latex_escape(_short_stop(run)),
+                ]
+            )
+            + r"\\"
+        )
+    lines.extend([r"\bottomrule", r"\end{tabular}%", r"}", r"\end{table}"])
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def _save_batch_size_summary(runs: list[ExperimentRun], path: Path) -> Path:
+    selected = [
+        run
+        for run in runs
+        if run.optimizer_name == "MiniBatchGradientDescent"
+        and "batch_size" in run.params
+        and run.result is not None
+        and run.function_params.get("dataset_kind") == "nonlinear"
+        and int(run.function_params.get("degree", 0) or 0) == 5
+        and float(run.function_params.get("lambda_l1", 0.0) or 0.0) == 0.0
+        and float(run.function_params.get("lambda_l2", 0.0) or 0.0) == 0.0
+        and "not_applicable" not in run.result.message.lower()
+    ]
+    lines = [
+        r"\begin{table}[H]",
+        r"\centering",
+        r"\caption{Сравнение batch size для nonlinear degree 5}",
+        r"\fitreporttable{%",
+        r"\begin{tabular}{lrrrrrrl}",
+        r"\toprule",
+        r"batch & $L$ & $Q$ & epochs & $N_g$ & updates & $\Delta L/1000N_g$ & status\\",
+        r"\midrule",
+    ]
+    for run in sorted(selected, key=lambda item: int(item.params.get("batch_size", item.result.metadata.get("batch_size", 0) if item.result else 0))):
+        result = run.result
+        assert result is not None
+        batch = int(run.params.get("batch_size", result.metadata.get("batch_size", 0)))
+        first_loss = float(result.history[0].extra_metrics.get("loss", result.history[0].f)) if result.history else result.f
+        gain_per_1000 = (first_loss - result.f) / max(1, result.n_grad_calls) * 1000.0
+        lines.append(
+            " & ".join(
+                [
+                    _latex_escape(_batch_label(batch)),
+                    _format_float(result.f),
+                    _format_float(_empirical_risk(run)),
+                    str(result.n_iter),
+                    str(result.n_grad_calls),
+                    str(result.metadata.get("updates", "--")),
+                    _format_float(gain_per_1000),
+                    _latex_escape(_short_stop(run)),
+                ]
+            )
+            + r"\\"
+        )
+    lines.extend([r"\bottomrule", r"\end{tabular}%", r"}", r"\end{table}"])
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
