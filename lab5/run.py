@@ -66,7 +66,12 @@ def _is_meaningful_run(run: ExperimentRun) -> bool:
 
 
 def _best_runs_per_optimizer(runs: list[ExperimentRun]) -> list[ExperimentRun]:
-    pool = [run for run in runs if _is_meaningful_run(run)]
+    pool = [
+        run
+        for run in runs
+        if _is_meaningful_run(run)
+        and not (run.optimizer_name == "MiniBatchGradientDescent" and "batch_size" in run.params)
+    ]
     by_optimizer: dict[str, ExperimentRun] = {}
     for run in pool:
         assert run.result is not None
