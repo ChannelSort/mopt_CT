@@ -247,7 +247,7 @@ Elastic Net, $\lambda=1$ & 0.93095 & 85\\
 }
 \end{table}
 
-\textbf{Промежуточный вывод.} Регуляризация увеличивает оптимизируемую функцию, потому что штраф входит прямо в значение $f$. Это не ошибка: смысл штрафа --- не уменьшить training loss любой ценой, а сдержать коэффициенты и сделать модель менее резкой.
+\textbf{Промежуточный вывод.} Регуляризация увеличивает оптимизируемую функцию, потому что штраф входит прямо в значение $f$. Смысл штрафа --- сдержать коэффициенты и сделать модель менее резкой.
 
 \subsection{Сравнение Gauss--Newton и Levenberg--Marquardt}
 
@@ -279,7 +279,7 @@ Elastic Net, $\lambda=1$ & 0.93095 & 85\\
 \plotplaceholder{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_1_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_fit.png}{Аппроксимация нелинейных данных моделью degree 1}
 \textit{Комментарий.} Модель первой степени не способна описать нелинейную зависимость, поэтому все методы дают похожую прямую с высоким loss. Это пример недообучения: недостаточная сложность модели, а не неудача оптимизатора.
 \plotplaceholder{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_5_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_fit.png}{Аппроксимация нелинейных данных моделью degree 5}
-\textit{Комментарий.} GN и LM используют структуру суммы квадратов через якобиан остатков и быстро находят хорошее приближение ($L\approx0.283$). SGD и mini-batch $b=16$ за 80 эпох сошлись хуже: у них loss выше ($0.49$ и $0.58$), а кривая менее похожа на истинную зависимость. Это не ошибка метода, а следствие лимита в 80 эпох и убывающего шага.
+\textit{Комментарий.} GN и LM используют структуру суммы квадратов через якобиан остатков и быстро находят хорошее приближение ($L\approx0.283$). SGD и mini-batch $b=16$ за 80 эпох сошлись хуже: у них loss выше ($0.49$ и $0.58$), а кривая менее похожа на истинную зависимость. Это следствие лимита в 80 эпох и убывающего шага.
 
 \plotplaceholder{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_5_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_fit_panels.png}{Аппроксимация nonlinear degree 5 по отдельным методам}
 
@@ -294,7 +294,7 @@ Elastic Net, $\lambda=1$ & 0.93095 & 85\\
 
 \twoplotplaceholder{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_5_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_history_loss.png}{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_5_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_history_loss_by_grad_calls.png}{История полного objective $L(w)$ для nonlinear degree 5}
 \plotplaceholder{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_5_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_history_loss_panels.png}{История $L(w)$ для nonlinear degree 5 по отдельным методам}
-\textit{Комментарий к графикам.} В легенде указаны итоговые $L(w)$, эмпирический риск $Q(w)$, число итераций/эпох и статус остановки. Для Gauss--Newton история иногда состоит из одной точки; маркер на графике показывает этот запуск даже тогда, когда линия визуально почти не видна. Если используется библиотечный или закрытый метод без истории, его нельзя было бы честно показать на history-графике; здесь Gauss--Newton реализован в проекте и история сохраняется.
+\textit{Комментарий к графикам.} В легенде указаны итоговые $L(w)$, эмпирический риск $Q(w)$, число итераций/эпох и статус остановки. Для Gauss--Newton на этих задачах история состоит из одной--двух точек: метод сходится за один шаг (одно решение нормальной системы $J^T J \Delta w = -J^T r$), после чего выполняется критерий по норме градиента. Поэтому на history-графиках виден только маркер финального значения.
 
 \twoplotplaceholder{lab5_batch_size_comparison_by_epoch.png}{lab5_batch_size_comparison_tradeoff.png}{Влияние размера batch по эпохам и trade-off между стоимостью, итоговым loss и шумом градиента}
 \twoplotplaceholder{lab5_batch_size_comparison_by_grad_calls.png}{lab5_batch_size_comparison_by_processed_samples.png}{Влияние размера batch по числу обновлений и по числу обработанных объектов}
