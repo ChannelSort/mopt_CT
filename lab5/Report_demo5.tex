@@ -270,10 +270,17 @@ Elastic Net, $\lambda=1$ & 0.93095 & 85\\
 \subsection{Fit-графики базовых моделей}
 
 \plotplaceholder{PolynomialRegressionObjective__dataset_kind_near_linear_degree_1_n_points_120_noise_variance_0.04_seed_11_x_range_-3.0_3.0_fit.png}{Аппроксимация почти линейных данных моделью degree 1}
+\textit{Комментарий.} Для линейной регрессии без регуляризации существует единственное решение метода наименьших квадратов. Поэтому линии analytic, SGD, GN и LM совпадают: все они сошлись к одному и тому же оптимуму (одинаковые $L=Q=0.0394$). Различимость методов обеспечена разными маркерами. Mini-batch $b=16$ за 80 эпох не дошёл до того же оптимума, поэтому его прямая чуть отличается и имеет больший loss.
+
 \plotplaceholder{PolynomialRegressionObjective__dataset_kind_near_linear_degree_1_n_points_120_noise_variance_0.04_seed_11_x_range_-3.0_3.0_fit_panels.png}{Аппроксимация почти линейных данных degree 1 по отдельным методам}
 \plotplaceholder{PolynomialRegressionObjective__dataset_kind_near_linear_degree_5_n_points_120_noise_variance_0.04_seed_11_x_range_-3.0_3.0_fit.png}{Аппроксимация почти линейных данных моделью degree 5}
+\textit{Комментарий.} Данные почти линейны, поэтому модель пятой степени избыточно гибкая: все методы находят решение, близкое к прямой, старшие коэффициенты близки к нулю. Loss почти такой же, как у degree 1.
+
 \plotplaceholder{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_1_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_fit.png}{Аппроксимация нелинейных данных моделью degree 1}
+\textit{Комментарий.} Модель первой степени не способна описать нелинейную зависимость, поэтому все методы дают похожую прямую с высоким loss. Это пример недообучения: недостаточная сложность модели, а не неудача оптимизатора.
 \plotplaceholder{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_5_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_fit.png}{Аппроксимация нелинейных данных моделью degree 5}
+\textit{Комментарий.} GN и LM используют структуру суммы квадратов через якобиан остатков и быстро находят хорошее приближение ($L\approx0.283$). SGD и mini-batch $b=16$ за 80 эпох сошлись хуже: у них loss выше ($0.49$ и $0.58$), а кривая менее похожа на истинную зависимость. Это не ошибка метода, а следствие лимита в 80 эпох и убывающего шага.
+
 \plotplaceholder{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_5_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_fit_panels.png}{Аппроксимация nonlinear degree 5 по отдельным методам}
 
 \tableplaceholder{../outputs/lab5/tables/fit_catalog.tex}

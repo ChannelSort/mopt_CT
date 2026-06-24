@@ -189,9 +189,18 @@ def _empirical_risk(run: ExperimentRun) -> float | None:
 
 def _run_label(run: ExperimentRun, *, include_regularization: bool = True, include_stats: bool = False) -> str:
     label = _optimizer_label(run.optimizer_name)
-    if run.optimizer_name == "MiniBatchGradientDescent" and "batch_size" in run.params:
-        batch = int(run.params["batch_size"])
-        label = f"SGD-style b=1" if batch == 1 else f"{label} b={batch}"
+    if run.optimizer_name == "StochasticGradientDescent":
+        label = f"{label} b=1"
+    elif run.optimizer_name == "MiniBatchGradientDescent":
+        batch: int | None = None
+        if "batch_size" in run.params:
+            batch = int(run.params["batch_size"])
+        elif run.result is not None:
+            metadata_batch = run.result.metadata.get("batch_size")
+            if metadata_batch is not None:
+                batch = int(metadata_batch)
+        if batch is not None:
+            label = f"mini-batch b={batch}"
     if include_regularization:
         reg = _regularization_label(run.function_params)
         if reg:
@@ -244,6 +253,18 @@ def _draw_regression_background(ax: plt.Axes, func: RegressionPlotFunction) -> N
     ax.plot(func.dataset.x, func.dataset.y_true, color="black", linewidth=1.8, label="true relation")
 
 
+def _fit_line_style(run: ExperimentRun) -> tuple[str, str | None, float]:
+    """Return (linestyle, marker, linewidth) to distinguish optimizers on a single fit plot."""
+    styles: dict[str, tuple[str, str | None, float]] = {
+        "AnalyticalLinearRegression1D": ("-", "o", 1.6),
+        "StochasticGradientDescent": ("--", "s", 1.6),
+        "MiniBatchGradientDescent": ("-", None, 2.2),
+        "GaussNewton": (":", "^", 1.8),
+        "LevenbergMarquardt": ("-.", "D", 1.6),
+    }
+    return styles.get(run.optimizer_name, ("-", None, 1.4))
+
+
 def plot_lab5_regression_fit(
     func: MultivariateFunction,
     results: list[ExperimentRun],
@@ -257,13 +278,28 @@ def plot_lab5_regression_fit(
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.set_prop_cycle(color=LAB5_LINE_COLORS)
     _draw_regression_background(ax, func)
-    for run in results:
+    for index, run in enumerate(results):
         weights = result_weights(run)
         if weights is None:
             continue
         table = func.dense_prediction_table(weights)
         label = _run_label(run, include_stats=True)
-        ax.plot(table["x"], table["y_pred"], linewidth=1.4, label=label)
+        linestyle, marker, linewidth = _fit_line_style(run)
+        n_grid = len(table["x"])
+        step = max(1, n_grid // 10)
+        markevery = slice(index % step, None, step) if marker is not None else None
+        ax.plot(
+            table["x"],
+            table["y_pred"],
+            linewidth=linewidth,
+            linestyle=linestyle,
+            marker=marker,
+            markevery=markevery,
+            markersize=5,
+            markerfacecolor="white",
+            markeredgewidth=1.0,
+            label=label,
+        )
     meta = _function_metadata(func)
     ax.set_title(f"{meta.get('dataset_kind', func.name)} degree={meta.get('degree', '?')} regression")
     ax.set_xlabel("x")
