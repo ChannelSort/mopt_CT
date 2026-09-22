@@ -1,3 +1,21 @@
 # optimlib
 
-Typed optimization algorithms and experiment utilities for the optimization-course monorepo.
+Учебная Python-библиотека методов оптимизации и средств проведения экспериментов
+для лабораторных работ по курсу «Методы оптимизации» в ИТМО.
+
+Для знакомства с работами начните с [отчёта ЛР5: полиномиальная регрессия](../lab5/Report_demo5.pdf).
+Ссылки на все отчёты, презентации и инструкции запуска находятся
+в [основном README](../README.md).
+
+## Код и проверка
+
+- [Реализация библиотеки](src/optimlib/).
+- [Тесты](tests/).
+- [Зависимости и настройки пакета](pyproject.toml).
+
+Из каталога `optimlib` в активированном окружении Python 3.10+:
+
+```bash
+python -m pip install -e ".[dev]"
+python -m pytest -q
+```

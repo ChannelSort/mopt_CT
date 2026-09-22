@@ -12,10 +12,21 @@
 \usetheme{Madrid}
 \usecolortheme{seahorse}
 \setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{blocks}[rounded][shadow=false]
+\setbeamertemplate{title page}[default][colsep=-4bp,rounded=true,shadow=false]
+\setbeamertemplate{footline}{%
+  \leavevmode\hbox{%
+    \begin{beamercolorbox}[wd=.80\paperwidth,ht=2.8ex,dp=1.2ex,leftskip=1em]{author in head/foot}%
+      \usebeamerfont{author in head/foot}\insertshorttitle
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.20\paperwidth,ht=2.8ex,dp=1.2ex,rightskip=1em plus1fil]{date in head/foot}%
+      \hfill\insertframenumber{} / \inserttotalframenumber
+    \end{beamercolorbox}}%
+}
 \setbeamertemplate{caption}[numbered]
 \hypersetup{unicode=true,colorlinks=true,linkcolor=blue,urlcolor=blue}
 
-\graphicspath{{../outputs/lab2/plots/}{../outputs/lab3/plots/}}
+\graphicspath{{assets/labs_2_3/}}
 
 \newcommand{\grad}{\nabla}
 \newcommand{\norm}[1]{\left\lVert #1 \right\rVert}
@@ -24,7 +35,8 @@
 
 \title[ЛР2 и ЛР3]{Методы оптимизации: лабораторные работы 2 и 3}
 \subtitle{Классический градиентный спуск, линейный поиск и модификации градиентного спуска}
-\author{Проект \texttt{mopt\_CT}}
+\author[А. Новиков, А. Душкин]{Алексей Новиков \and Александр Душкин}
+\institute{Университет ИТМО · Курс «Методы оптимизации»}
 \date{2026}
 
 \begin{document}

@@ -1,0 +1,719 @@
+\documentclass[10pt,aspectratio=169]{beamer}
+
+\usepackage{cmap}
+\usepackage[T2A]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[russian]{babel}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{array}
+\usepackage{adjustbox}
+\usepackage{hyperref}
+
+\usetheme{Madrid}
+\usecolortheme{seahorse}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{blocks}[rounded][shadow=false]
+\setbeamertemplate{title page}[default][colsep=-4bp,rounded=true,shadow=false]
+\setbeamertemplate{footline}{%
+  \leavevmode\hbox{%
+    \begin{beamercolorbox}[wd=.80\paperwidth,ht=2.8ex,dp=1.2ex,leftskip=1em]{author in head/foot}%
+      \usebeamerfont{author in head/foot}\insertshorttitle
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.20\paperwidth,ht=2.8ex,dp=1.2ex,rightskip=1em plus1fil]{date in head/foot}%
+      \hfill\insertframenumber{} / \inserttotalframenumber
+    \end{beamercolorbox}}%
+}
+\setbeamertemplate{caption}[numbered]
+\hypersetup{unicode=true,colorlinks=true,linkcolor=blue,urlcolor=blue}
+
+\graphicspath{{assets/labs_4_5/}}
+
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\grad}{\nabla}
+\newcommand{\norm}[1]{\left\lVert #1 \right\rVert}
+\newcommand{\inner}[2]{\left\langle #1,#2 \right\rangle}
+\newcommand{\eps}{\varepsilon}
+\newcommand{\smallnote}[1]{\vspace{0.35em}{\footnotesize\color{gray!75!black}#1}}
+\newcommand{\plotone}[2]{%
+    \begin{center}
+        \includegraphics[width=\linewidth,height=0.72\textheight,keepaspectratio]{#1}
+    \end{center}
+    \vspace{-0.4em}
+    {\footnotesize #2}
+}
+\newcommand{\plottwo}[4]{%
+    \begin{columns}[T,onlytextwidth]
+        \column{0.49\textwidth}
+        \includegraphics[width=\linewidth,height=0.60\textheight,keepaspectratio]{#1}
+        \column{0.49\textwidth}
+        \includegraphics[width=\linewidth,height=0.60\textheight,keepaspectratio]{#2}
+    \end{columns}
+    \vspace{0.2em}
+    {\footnotesize \textbf{#3.} #4}
+}
+
+\title[ЛР4 и ЛР5]{Методы оптимизации: лабораторные работы 4 и 5}
+\subtitle{Методы Ньютона, квазиньютоновские методы и data-driven задачи регрессии}
+\author[А. Новиков, А. Душкин]{Алексей Новиков \and Александр Душкин}
+\institute{Университет ИТМО · Курс «Методы оптимизации»}
+\date{2026}
+
+\begin{document}
+
+\begin{frame}
+    \titlepage
+\end{frame}
+
+\begin{frame}{Материалы и назначение презентации}
+\begin{columns}[T,onlytextwidth]
+\column{0.52\textwidth}
+\textbf{Использованные материалы:}
+\begin{itemize}
+    \item условия ЛР4 и ЛР5;
+    \item отчеты \texttt{Report\_demo4.tex}, \texttt{Report\_demo5.tex};
+    \item код \texttt{functions.py}, \texttt{run.py}, \texttt{config.yaml};
+    \item результаты из \texttt{outputs/lab4} и \texttt{outputs/lab5};
+    \item конспект последних тем: CG, Newton, BFGS, GN, LM, regression.
+\end{itemize}
+\column{0.44\textwidth}
+\textbf{Фокус защиты:}
+\begin{itemize}
+    \item постановка задачи и критерии остановки;
+    \item какие методы реализованы и зачем;
+    \item что показывают графики и таблицы;
+    \item почему часть запусков формально неуспешна;
+    \item выводы по методам и применимости.
+\end{itemize}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Общие критерии сравнения}
+\begin{block}{Критерий остановки}
+\[
+    \norm{\grad f(x_k)} \le 10^{-8}.
+\]
+\end{block}
+
+\begin{columns}[T,onlytextwidth]
+\column{0.48\textwidth}
+\textbf{Метрики в ЛР4}
+\begin{itemize}
+    \item число итераций;
+    \item число вызовов $f$;
+    \item число вызовов $\grad f$;
+    \item число вызовов $\grad^2 f$;
+    \item причина остановки.
+\end{itemize}
+\column{0.48\textwidth}
+\textbf{Метрики в ЛР5}
+\begin{itemize}
+    \item loss и empirical risk;
+    \item число эпох или итераций;
+    \item число вычислений градиента;
+    \item время работы;
+    \item коэффициенты модели.
+\end{itemize}
+\end{columns}
+
+\smallnote{Успешный запуск означает выполнение строгого критерия остановки, а не просто хорошее значение функции.}
+\end{frame}
+
+\section{Лабораторная 4}
+
+\begin{frame}{ЛР4: постановка и экспериментальный протокол}
+\begin{columns}[T,onlytextwidth]
+\column{0.5\textwidth}
+\textbf{Задачи из условия}
+\begin{itemize}
+    \item линейный CG на SPD-квадратиках;
+    \item нелинейные CG: Fletcher--Reeves и Polak--Ribiere;
+    \item NewtonCholesky и NewtonDirectionChoice;
+    \item trust-region Powell Dog Leg;
+    \item DFP, BFGS, L-BFGS;
+    \item сравнение с SciPy Newton-CG.
+\end{itemize}
+\column{0.47\textwidth}
+\textbf{Эксперимент}
+\begin{itemize}
+    \item $n\in\{2,10,50,100\}$;
+    \item $\kappa\in\{1,10,100,1000\}$;
+    \item по два seed для каждой пары $(n,\kappa)$;
+    \item 2D-траектории: quadratic, Rosenbrock, Himmelblau, Ackley;
+    \item всего 552 запуска.
+\end{itemize}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Квадратичная модель и обусловленность}
+\[
+    f(x)=\frac12\inner{Hx}{x}+\inner{c}{x}+b,
+    \qquad \grad f(x)=Hx+c,\qquad \grad^2 f(x)=H.
+\]
+
+\begin{block}{Если $H\succ0$}
+\[
+    x^*=-H^{-1}c,\qquad
+    f(x)=f(x^*)+\frac12\inner{H(x-x^*)}{x-x^*}.
+\]
+\end{block}
+
+\begin{block}{Число обусловленности}
+\[
+    \kappa(H)=\frac{\lambda_{\max}}{\lambda_{\min}}.
+\]
+\end{block}
+
+\smallnote{Рост $\kappa$ делает линии уровня вытянутыми. Методы без явной информации о кривизне начинают идти зигзагами или требуют больше линейных поисков.}
+\end{frame}
+
+\begin{frame}{CG и nonlinear CG}
+\begin{columns}[T,onlytextwidth]
+\column{0.49\textwidth}
+\textbf{Линейный CG для SPD-квадратики}
+\[
+    f(x)=\frac12 x^TAx-b^Tx,\qquad A\succ0.
+\]
+\[
+    p_0=-g_0,\qquad
+    \alpha_k=\frac{g_k^Tg_k}{p_k^TAp_k},
+\]
+\[
+    x_{k+1}=x_k+\alpha_kp_k,
+    \qquad
+    p_{k+1}=-g_{k+1}+\beta_kp_k.
+\]
+\column{0.49\textwidth}
+\textbf{Нелинейные варианты}
+\[
+    \beta_k^{FR}=
+    \frac{g_{k+1}^Tg_{k+1}}{g_k^Tg_k},
+\]
+\[
+    \beta_k^{PR}=
+    \frac{g_{k+1}^T(g_{k+1}-g_k)}{g_k^Tg_k}.
+\]
+\[
+    \beta_k=\max(0,\beta_k^{PR})\quad\text{в PR+}.
+\]
+\end{columns}
+
+\smallnote{Гарантия ``не более $n$ шагов'' относится к SPD-квадратике и точной арифметике. На нелинейных функциях это уже эвристика направления.}
+\end{frame}
+
+\begin{frame}{Newton, LM и trust-region}
+\[
+    m_k(p)=f(x_k)+g_k^Tp+\frac12p^TH_kp.
+\]
+
+\begin{columns}[T,onlytextwidth]
+\column{0.48\textwidth}
+\textbf{Newton}
+\[
+    H_kp_k=-g_k.
+\]
+Если $H_k\succ0$, то
+\[
+    g_k^Tp_k=-g_k^TH_k^{-1}g_k<0.
+\]
+
+\textbf{LM / сдвиг Гессиана}
+\[
+    (H_k+\lambda_k I)p_k=-g_k.
+\]
+\column{0.48\textwidth}
+\textbf{Trust-region}
+\[
+    \min_{\norm{p}\le\Delta_k} m_k(p).
+\]
+\[
+    \rho_k=
+    \frac{f(x_k)-f(x_k+p_k)}
+         {m_k(0)-m_k(p_k)}.
+\]
+Powell Dog Leg использует ломаную: шаг Коши $\to$ ньютоновский шаг.
+\end{columns}
+\end{frame}
+
+\begin{frame}{Квазиньютоновские методы}
+\[
+    s_k=x_{k+1}-x_k,\qquad y_k=g_{k+1}-g_k,\qquad G_k\approx H_k^{-1}.
+\]
+
+\begin{block}{Секущее условие}
+\[
+    G_{k+1}y_k=s_k,\qquad y_k^Ts_k>0.
+\]
+\end{block}
+
+\begin{columns}[T,onlytextwidth]
+\column{0.49\textwidth}
+\textbf{BFGS}
+\[
+G_{k+1}=(I-\rho sy^T)G_k(I-\rho ys^T)+\rho ss^T,
+\quad \rho=\frac1{y^Ts}.
+\]
+\column{0.49\textwidth}
+\textbf{DFP}
+\[
+G_{k+1}=G_k+\frac{ss^T}{s^Ty}
+-\frac{G_kyy^TG_k}{y^TG_ky}.
+\]
+\end{columns}
+
+\smallnote{L-BFGS не хранит полную матрицу $G_k$, а использует последние $m$ пар $(s_i,y_i)$, поэтому память $O(mn)$ вместо $O(n^2)$.}
+\end{frame}
+
+\begin{frame}{ЛР4: что реализовано в коде}
+\begin{columns}[T,onlytextwidth]
+\column{0.48\textwidth}
+\textbf{Функции}
+\begin{itemize}
+    \item \texttt{GeneratedQuadratic};
+    \item \texttt{Quadratic2DVisualization};
+    \item \texttt{Lab4Rosenbrock};
+    \item \texttt{Lab4Himmelblau};
+    \item \texttt{Lab4Ackley}.
+\end{itemize}
+\column{0.49\textwidth}
+\textbf{Особенности эксперимента}
+\begin{itemize}
+    \item history траекторий включает стартовую точку $x_0$;
+    \item на Ackley и Himmelblau есть запуски около седловых областей;
+    \item для NewtonDirectionChoice сохранялась диагностика выбора направления;
+    \item для L-BFGS исследовались $m=3,5,10$.
+\end{itemize}
+\end{columns}
+\end{frame}
+
+\begin{frame}{ЛР4: средние метрики на GeneratedQuadratic}
+\scriptsize
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{lrrrrr}
+\toprule
+Метод & Успешных & Итерации & $N_f$ & $N_g$ & $N_H$\\
+\midrule
+NewtonCholesky & 32 & 1.00 & 3.00 & 3.00 & 1.00\\
+NewtonDirectionChoice & 32 & 1.00 & 3.00 & 3.00 & 1.00\\
+PowellDogLeg & 32 & 4.94 & 5.94 & 5.94 & 4.94\\
+QuadraticConjugateGradient & 16 & 70.25 & 71.25 & 71.25 & 1.00\\
+BFGS & 17 & 31.09 & 240.12 & 65.06 & 0.00\\
+DFP & 16 & 27.97 & 200.28 & 58.31 & 0.00\\
+LBFGS & 40 & 68.99 & 261.59 & 140.66 & 0.00\\
+ScipyNewtonCG & 25 & 10.69 & 28.66 & 27.22 & 10.88\\
+FletcherReeves & 8 & 239.91 & 2997.56 & 498.41 & 0.00\\
+PolakRibiere & 8 & 148.78 & 1727.84 & 307.00 & 0.00\\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+
+\smallnote{L-BFGS считается по трем значениям памяти $m$, поэтому успешных запусков может быть больше, чем число отдельных квадратичных задач.}
+\end{frame}
+
+\begin{frame}{ЛР4: влияние размерности и обусловленности}
+\plottwo{lab4_n_iter_vs_n_k_10.png}
+        {lab4_n_iter_vs_k_n_10.png}
+        {Число итераций}
+        {При росте $n$ и $\kappa$ методы без точного Гессиана сильнее накапливают цену. Ньютоновские методы почти не увеличивают число итераций, но их шаг дороже из-за линейной алгебры.}
+\end{frame}
+
+\begin{frame}{ЛР4: вычислительная цена}
+\plottwo{lab4_n_grad_calls_vs_n_k_10.png}
+        {lab4_n_hessian_calls_vs_n_k_10.png}
+        {Вызовы производных}
+        {Квазиньютоновские и CG-методы не вызывают Гессиан, но могут тратить больше градиентов. Ньютоновские методы экономят итерации, но платят вычислением и факторизацией Гессиана.}
+\end{frame}
+
+\begin{frame}{ЛР4: сравнение методов и память L-BFGS}
+\plottwo{lab4_comparison_n_iter.png}
+        {lab4_lbfgs_memory_n_iter.png}
+        {Итоговое сравнение}
+        {SciPy Newton-CG служит устойчивой библиотечной точкой сравнения. У L-BFGS параметр $m$ задает объем сохраняемой кривизны: больше памяти не всегда означает заметно меньше итераций.}
+\end{frame}
+
+\begin{frame}{ЛР4: диагностика NewtonDirectionChoice}
+\scriptsize
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{lrrrrr}
+\toprule
+Функция & Запусков & newton & modified\_newton & steepest\_descent & max $\lambda$\\
+\midrule
+GeneratedQuadratic & 32 & 32 & 0 & 0 & 0\\
+Lab4Ackley & 3 & 9 & 2 & 0 & 19.6791\\
+Lab4Himmelblau & 3 & 11 & 3 & 0 & 42\\
+Lab4Rosenbrock & 3 & 62 & 0 & 0 & 0\\
+Quadratic2DVisualization & 5 & 5 & 0 & 0 & 0\\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+
+\begin{itemize}
+    \item На SPD-квадратиках всегда достаточно обычного ньютоновского направления.
+    \item На Ackley и Himmelblau появляются сдвиги $H+\lambda I$: локальная кривизна не всегда положительно определена.
+    \item Переход к steepest descent не потребовался: сдвиг Гессиана оказался достаточным.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{ЛР4: траектории на квадратичной функции}
+\plotone{Quadratic2DVisualization__seed_42_x0_-8.0_-6.0_x_star_1.0_-1.0__trajectory_panels.png}
+{На квадратичной функции ньютоновское направление быстро попадает в минимум. CG- и квазиньютоновские методы постепенно восстанавливают геометрию задачи.}
+\end{frame}
+
+\begin{frame}{ЛР4: траектории на Rosenbrock}
+\plotone{Lab4Rosenbrock__x0_-1.2_1.0__trajectory_panels.png}
+{У Rosenbrock узкая изогнутая долина. Траектории могут делать дуги и корректировки; это нормальное поведение для методов, использующих локальную информацию о кривизне.}
+\end{frame}
+
+\begin{frame}{ЛР4: траектории на Himmelblau}
+\plotone{Lab4Himmelblau__x0_3.35_0.08__trajectory_panels.png}
+{Старт выбран около седловой области, но не ровно в седле. Методы могут уходить к разным областям притяжения, поэтому важно видеть стартовую точку и первые шаги.}
+\end{frame}
+
+\begin{frame}{ЛР4: траектории на Ackley}
+\plotone{Lab4Ackley__x0_0.7_0.65__trajectory_panels.png}
+{Ackley содержит локальные колебания. Траектория может визуально ``крутиться'', если локальная модель несколько раз меняет направление; это не ошибка само по себе.}
+\end{frame}
+
+\begin{frame}{ЛР4: выводы для защиты}
+\begin{itemize}
+    \item На SPD-квадратиках методы Ньютона ожидаемо выигрывают по итерациям: точный Гессиан полностью задает форму функции.
+    \item Powell Dog Leg делает больше шагов, зато контролирует доверие к локальной квадратичной модели.
+    \item BFGS и L-BFGS являются компромиссом: вторые производные не нужны, но информация о кривизне накапливается постепенно.
+    \item Нелинейные CG чувствительны к линейному поиску и потере сопряженности.
+    \item Формально успешный запуск требует $\norm{\grad f(x_k)}\le 10^{-8}$; остановка по \texttt{max\_iter} или \texttt{step\_tol} может дать хорошую точку, но не считается строгой сходимостью.
+\end{itemize}
+\end{frame}
+
+\section{Лабораторная 5}
+
+\begin{frame}{ЛР5: постановка и экспериментальный протокол}
+\begin{columns}[T,onlytextwidth]
+\column{0.5\textwidth}
+\textbf{Задачи из условия}
+\begin{itemize}
+    \item сгенерировать near-linear и nonlinear данные;
+    \item построить полиномиальные модели степеней 1--5;
+    \item сравнить analytic solution, SGD, mini-batch, GN, LM;
+    \item изучить batch size;
+    \item сравнить L1, L2 и Elastic Net.
+\end{itemize}
+\column{0.47\textwidth}
+\textbf{Эксперимент}
+\begin{itemize}
+    \item 120 точек в каждом датасете;
+    \item шум: $0.04$ для near-linear и $0.09$ для nonlinear;
+    \item $\lambda\in\{10^{-3},10^{-2},10^{-1},1\}$;
+    \item batch size: $1,4,8,16,32,64,120$;
+    \item всего 264 запуска.
+\end{itemize}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Regression как задача оптимизации}
+\begin{block}{Data-driven постановка}
+\[
+    \{(x_i,y_i)\}_{i=1}^{N},\qquad
+    f(x,w)\approx y.
+\]
+\end{block}
+
+\begin{block}{Empirical risk для регрессии}
+\[
+    Q(w)=\frac1N\sum_{i=1}^{N}(f(x_i,w)-y_i)^2.
+\]
+\end{block}
+
+\begin{block}{Полиномиальная модель}
+\[
+    f(x,w)=\sum_{j=0}^{d} w_j z^j,
+    \qquad
+    z=\frac{x-\bar x}{s_x}.
+\]
+\end{block}
+
+\smallnote{Нормировка $x$ уменьшает плохую обусловленность степеней $x^j$.}
+\end{frame}
+
+\begin{frame}{Лосс, риск и регуляризация}
+\begin{columns}[T,onlytextwidth]
+\column{0.5\textwidth}
+\textbf{Loss на одном объекте}
+\[
+    \ell_i(w)=(f(x_i,w)-y_i)^2.
+\]
+
+\textbf{Средний риск}
+\[
+    Q(w)=\frac1N\sum_i \ell_i(w).
+\]
+\column{0.47\textwidth}
+\textbf{Регуляризованная цель}
+\[
+    F(w)=Q(w)+\lambda_1\norm{w}_{1}+\lambda_2\norm{w}_2^2.
+\]
+\[
+    |w_j|\approx\sqrt{w_j^2+\delta^2}
+\]
+для сглаженной L1.
+\end{columns}
+
+\smallnote{В экспериментах свободный коэффициент $w_0$ не регуляризируется: он отвечает за вертикальный сдвиг, а не за сложность формы.}
+\end{frame}
+
+\begin{frame}{Аналитическое решение и стохастические методы}
+\begin{columns}[T,onlytextwidth]
+\column{0.49\textwidth}
+\textbf{1D linear regression}
+\[
+    f(x)=wx+b.
+\]
+\[
+    w=
+    \frac{\overline{xy}-\bar x\bar y}
+         {\overline{x^2}-(\bar x)^2},
+    \qquad
+    b=\bar y-w\bar x.
+\]
+
+\column{0.49\textwidth}
+\textbf{SGD / mini-batch}
+\[
+    w_{t+1}=w_t-\alpha_t \grad \ell_{i_t}(w_t),
+\]
+\[
+    w_{t+1}=w_t-\alpha_t\frac1{|B_t|}
+    \sum_{i\in B_t}\grad\ell_i(w_t).
+\]
+\end{columns}
+\end{frame}
+
+\begin{frame}{Gauss--Newton и Levenberg--Marquardt}
+\[
+    F(w)=\frac12\norm{r(w)}^2,\qquad
+    r_i(w)=f(x_i,w)-y_i.
+\]
+\[
+    \grad F(w)=J(w)^Tr(w),
+\]
+\[
+    \grad^2 F(w)=J(w)^TJ(w)+\sum_{i=1}^{N}r_i(w)\grad^2 r_i(w).
+\]
+
+\begin{columns}[T,onlytextwidth]
+\column{0.49\textwidth}
+\textbf{Gauss--Newton}
+\[
+    J_k^TJ_kp_k=-J_k^Tr_k.
+\]
+\column{0.49\textwidth}
+\textbf{Levenberg--Marquardt}
+\[
+    (J_k^TJ_k+\lambda_k I)p_k=-J_k^Tr_k.
+\]
+\end{columns}
+
+\smallnote{Если residual мал или модель почти линейна по параметрам, $J^TJ$ хорошо приближает точный Гессиан.}
+\end{frame}
+
+\begin{frame}{ЛР5: что реализовано в коде}
+\begin{columns}[T,onlytextwidth]
+\column{0.48\textwidth}
+\textbf{Данные и модель}
+\begin{itemize}
+    \item \texttt{near\_linear\_true};
+    \item \texttt{nonlinear\_true};
+    \item генерация шума;
+    \item нормировка признака;
+    \item матрица дизайна для степени $d$;
+    \item \texttt{PolynomialRegressionObjective}.
+\end{itemize}
+\column{0.49\textwidth}
+\textbf{Методы}
+\begin{itemize}
+    \item \texttt{AnalyticalLinearRegression1D};
+    \item \texttt{StochasticGradientDescent};
+    \item \texttt{MiniBatchGradientDescent};
+    \item \texttt{GaussNewton};
+    \item \texttt{LevenbergMarquardt};
+    \item сохранение histories, coefficients, datasets, summary.
+\end{itemize}
+\end{columns}
+\end{frame}
+
+\begin{frame}{ЛР5: сравнение основных методов}
+\scriptsize
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{lrrrrr}
+\toprule
+Метод & Успешных & Лучшее $f$ & Средн. итераций & $N_f$ & $N_g$\\
+\midrule
+AnalyticalLinearRegression1D & 2 & 0.0394 & 1.00 & 1.00 & 1.00\\
+GaussNewton & 10 & 0.0385 & 1.00 & 2.00 & 2.00\\
+LevenbergMarquardt & 10 & 0.0385 & 3.20 & 4.20 & 4.20\\
+MiniBatchGradientDescent & 0 & 0.0618 & 80.00 & 81.00 & 1304.53\\
+StochasticGradientDescent & 0 & 0.0394 & 80.00 & 81.00 & 9681.00\\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+
+\smallnote{SGD и mini-batch дошли до лимита 80 эпох, поэтому не считаются успешными по строгому критерию, хотя SGD на части задач дает близкий loss.}
+\end{frame}
+
+\begin{frame}{ЛР5: влияние степени полинома}
+\scriptsize
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{lrrrrr}
+\toprule
+Данные & degree 1 & degree 2 & degree 3 & degree 4 & degree 5\\
+\midrule
+near\_linear & 0.03942 & 0.03936 & 0.03928 & 0.03861 & 0.03853\\
+nonlinear & 1.17604 & 1.15854 & 0.82320 & 0.80880 & 0.28341\\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+
+\begin{itemize}
+    \item Для near-linear данных высокая степень почти не нужна: первая степень уже описывает основную структуру.
+    \item Для nonlinear данных степень 5 резко улучшает loss: модель получает достаточно гибкости для пика и осцилляции.
+    \item Это одновременно увеличивает риск переобучения, поэтому дальше исследовалась регуляризация.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{ЛР5: аппроксимация near-linear данных}
+\plotone{PolynomialRegressionObjective__dataset_kind_near_linear_degree_5_n_points_120_noise_variance_0.04_seed_11_x_range_-3.0_3.0_fit.png}
+{Истинная зависимость почти линейна. Высокая степень в основном подстраивает малые колебания и шум, поэтому выигрыш по loss небольшой.}
+\end{frame}
+
+\begin{frame}{ЛР5: аппроксимация nonlinear данных}
+\plotone{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_5_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_fit.png}
+{Нелинейная зависимость содержит пик и осцилляцию. Полином степени 5 заметно лучше описывает форму данных, чем степени 1--4.}
+\end{frame}
+
+\begin{frame}{ЛР5: истории loss}
+\plottwo{PolynomialRegressionObjective__dataset_kind_nonlinear_degree_5_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_history_loss.png}
+        {PolynomialRegressionObjective__dataset_kind_nonlinear_degree_5_n_points_120_noise_variance_0.09_seed_17_x_range_-2.5_2.5_history_loss_by_grad_calls.png}
+        {История обучения}
+        {Ось по итерациям показывает динамику метода, а ось по вызовам градиента честнее сравнивает вычислительную цену SGD и mini-batch с GN/LM.}
+\end{frame}
+
+\begin{frame}{ЛР5: batch size}
+\plottwo{lab5_batch_size_comparison_by_epoch.png}
+        {lab5_batch_size_comparison_by_grad_calls.png}
+        {Размер батча}
+        {Малый batch дает частые шумные обновления, большой batch ближе к полному градиенту. Сравнение по эпохам и по $N_g$ разделяет устойчивость и фактическую цену.}
+\end{frame}
+
+\begin{frame}{ЛР5: регуляризация nonlinear degree 5}
+\scriptsize
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{lrr}
+\toprule
+Регуляризация & $f$ & Итерации\\
+\midrule
+нет & 0.28341 & 4\\
+L1, $\lambda=0.001$ & 0.29050 & 4\\
+L1, $\lambda=0.01$ & 0.35078 & 5\\
+L1, $\lambda=0.1$ & 0.63649 & 53\\
+L1, $\lambda=1$ & 0.88710 & 58\\
+L2, $\lambda=0.001$ & 0.29969 & 4\\
+L2, $\lambda=0.01$ & 0.39649 & 4\\
+L2, $\lambda=0.1$ & 0.57235 & 3\\
+L2, $\lambda=1$ & 0.69107 & 3\\
+Elastic Net, $\lambda=0.001$ & 0.30646 & 4\\
+Elastic Net, $\lambda=0.01$ & 0.44208 & 4\\
+Elastic Net, $\lambda=0.1$ & 0.65768 & 47\\
+Elastic Net, $\lambda=1$ & 0.93095 & 85\\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+
+\smallnote{Полная оптимизируемая функция растет, потому что штраф входит прямо в $f$. Это не ошибка: регуляризация ограничивает коэффициенты и гибкость модели.}
+\end{frame}
+
+\begin{frame}{ЛР5: loss и empirical risk при регуляризации}
+\plottwo{lab5_regularization_loss.png}
+        {lab5_regularization_empirical_risk.png}
+        {Полная цель и риск}
+        {Полный loss включает штраф, empirical risk измеряет ошибку аппроксимации. При росте регуляризации модель жертвует точностью на train ради более сдержанных коэффициентов.}
+\end{frame}
+
+\begin{frame}{ЛР5: что делает регуляризация с моделью}
+\plottwo{lab5_regularization_fit.png}
+        {lab5_regularized_coefficients.png}
+        {Форма кривой и коэффициенты}
+        {L1 сильнее зануляет коэффициенты, L2 уменьшает их плавнее, Elastic Net совмещает оба эффекта. На графике видно, что штраф меняет саму модель, а не только значение функции.}
+\end{frame}
+
+\begin{frame}{ЛР5: сравнение методов по loss и времени}
+\plottwo{lab5_method_comparison_loss.png}
+        {lab5_method_comparison_elapsed_seconds.png}
+        {Методы оптимизации}
+        {GN и LM используют структуру суммы квадратов и быстро получают малую ошибку. SGD дешев в одном обновлении, но требует много градиентных вычислений и не достиг строгого критерия за 80 эпох.}
+\end{frame}
+
+\begin{frame}{ЛР5: выводы для защиты}
+\begin{itemize}
+    \item Регрессия сведена к минимизации эмпирического риска: loss строится из ошибок предсказания на данных.
+    \item Для одномерной линейной модели аналитическое решение самое дешевое, но применимо только в узком случае.
+    \item Gauss--Newton и LM эффективны, потому что используют якобиан невязок всей least squares задачи.
+    \item LM устойчивее GN за счет демпфирования: плохой шаг увеличивает $\lambda$, хороший шаг уменьшает.
+    \item Регуляризация повышает полную цель, но уменьшает гибкость модели и ограничивает коэффициенты.
+    \item Строки \texttt{skipped\_batch\_study} в CSV являются техническим фильтром, а не неудачным обучением.
+\end{itemize}
+\end{frame}
+
+\section{Итог}
+
+\begin{frame}{Связь ЛР4 и ЛР5}
+\begin{columns}[T,onlytextwidth]
+\column{0.48\textwidth}
+\textbf{ЛР4}
+\begin{itemize}
+    \item классическая безусловная оптимизация;
+    \item квадратичные модели;
+    \item Гессиан и его аппроксимации;
+    \item глобализация через line search и trust-region.
+\end{itemize}
+\column{0.49\textwidth}
+\textbf{ЛР5}
+\begin{itemize}
+    \item data-driven постановка;
+    \item loss строится по выборке;
+    \item least squares дает структуру $J^TJ$;
+    \item GN и LM используют ту же идею квадратичной модели.
+\end{itemize}
+\end{columns}
+
+\smallnote{Главная связь: в обеих лабораторных локальная квадратичная модель объясняет направление шага, но в ЛР5 эта модель появляется из невязок данных.}
+\end{frame}
+
+\begin{frame}{Короткий чеклист перед защитой}
+\small
+\begin{itemize}
+    \item Почему $H\succ0$ гарантирует направление спуска для Ньютона?
+    \item Чем line search отличается от trust-region?
+    \item Почему CG имеет конечную сходимость только на SPD-квадратиках?
+    \item Что означает условие $s_k^Ty_k>0$ в BFGS/DFP?
+    \item Что такое successful run и почему SGD может иметь 0 успешных запусков?
+    \item Чем loss отличается от empirical risk и от регуляризованной цели?
+    \item Почему GN заменяет точный Гессиан на $J^TJ$?
+    \item Почему LM переходит между GN и градиентным спуском?
+    \item Что меняют L1, L2 и Elastic Net в коэффициентах модели?
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Файлы результатов}
+\begin{itemize}
+    \item ЛР4: \texttt{outputs/lab4/summary.csv}, \texttt{outputs/lab4/plots}.
+    \item ЛР5: \texttt{outputs/lab5/tables/summary.csv}, histories, coefficients, datasets.
+    \item Графики презентации сохранены в \texttt{presentation/assets/labs\_4\_5/}.
+    \item Полные таблицы остаются в CSV; в слайды вынесены агрегаты и ключевые иллюстрации для защиты.
+\end{itemize}
+
+\begin{block}{Главный итог}
+Методы второго порядка выигрывают, когда Гессиан или структура least squares доступны и надежны; квазиньютоновские и стохастические методы являются компромиссом по памяти, производным и стоимости одной итерации.
+\end{block}
+\end{frame}
+
+\end{document}

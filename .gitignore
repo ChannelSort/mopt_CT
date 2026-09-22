@@ -31,3 +31,14 @@ out/
 
 # Local logs
 *.log
+
+# LaTeX build files (keep sources and final PDFs)
+*.aux
+*.out
+*.toc
+*.nav
+*.snm
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+presentation/.build/
